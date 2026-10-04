@@ -1,0 +1,63 @@
+HOW TO MODIFY THE VITHAI TO ARUVADAI APP FROM ANOTHER LAPTOP
+
+Live app:
+https://v2-a-eight.vercel.app/
+
+GitHub source code:
+https://github.com/Niranjan150208/V2A
+
+WHAT YOU NEED ON THE OTHER LAPTOP
+1. Internet access.
+2. Access to the GitHub account/repository above.
+3. Git for Windows: https://git-scm.com/downloads
+4. Node.js LTS (npm is included): https://nodejs.org/
+5. Visual Studio Code (recommended): https://code.visualstudio.com/
+
+STEP 1 — DOWNLOAD THE PROJECT
+Open PowerShell or the VS Code terminal and run:
+
+  git clone https://github.com/Niranjan150208/V2A.git
+  cd V2A
+
+If GitHub asks you to sign in, complete the sign-in in your browser. Do not share your password or verification codes.
+
+STEP 2 — INSTALL THE PROJECT PACKAGES
+Run this once after cloning:
+
+  npm.cmd install
+
+STEP 3 — OPEN AND RUN THE APP ON YOUR LAPTOP
+Open the V2A folder in VS Code. In the terminal, run:
+
+  npm.cmd run dev
+
+Open the local address printed in the terminal (usually http://localhost:5173) in your browser. The local version is for testing; visitors will continue to see the deployed version until your changes are pushed and deployed.
+
+STEP 4 — MAKE CHANGES
+Edit the files in the src folder using VS Code. Save your changes, then check the local app in your browser. Before publishing, you can check that it builds by running:
+
+  npm.cmd run build
+
+STEP 5 — SEND YOUR CHANGES TO GITHUB
+In the VS Code terminal, run:
+
+  git add .
+  git commit -m "Describe your changes"
+  git push
+
+On a new laptop, Git may ask for your commit name and email. Set them once with your own details:
+
+  git config --global user.name "Your Name"
+  git config --global user.email "you@example.com"
+
+Replace the example name and email with your preferred commit identity. These identify your commits; they are separate from GitHub sign-in.
+
+STEP 6 — PUBLISH THE UPDATED APP
+If the Vercel project is connected to this GitHub repository, pushing changes to the main branch should start a new Vercel deployment automatically. Check the deployment in your Vercel dashboard and open the live URL after its status says Ready.
+
+If no deployment starts, sign in at https://vercel.com, open the project, and check Settings > Git to confirm it is connected to Niranjan150208/V2A and deploys from the main branch.
+
+IMPORTANT
+- Do not commit passwords, access tokens, or other private credentials to GitHub.
+- Keep the GitHub repository as the main copy of your source code. Downloading the live website alone is not the same as getting the editable source project.
+- If you edit on more than one laptop, run "git pull" inside the V2A folder before starting new work so you get the latest changes.

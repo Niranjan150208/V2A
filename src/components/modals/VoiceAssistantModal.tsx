@@ -9,6 +9,7 @@ import {
   CornerDownRight,
 } from "lucide-react";
 import { useNavigation, AppRoute } from "../../context/NavigationContext";
+import { askAgriAssistant } from "../../services/ai";
 
 interface SpeechRecognitionResultLike {
   isFinal: boolean;
@@ -38,6 +39,7 @@ export const VoiceAssistantModal: React.FC = () => {
   const { isVoiceModalOpen, setIsVoiceModalOpen, language, navigate } =
     useNavigation();
   const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [assistantReply, setAssistantReply] = useState("");
   const [suggestedRoute, setSuggestedRoute] = useState<AppRoute | null>(null);
@@ -98,21 +100,25 @@ export const VoiceAssistantModal: React.FC = () => {
     return "/dashboard";
   };
 
-  const setQuery = (promptText: string, wasSpoken = false) => {
+  const setQuery = async (promptText: string, wasSpoken = false) => {
     setIsListening(false);
     setTranscript(promptText);
     const route = suggestDestination(promptText);
     setSuggestedRoute(route);
-    setAssistantReply(
-      language === "ta"
-        ? wasSpoken
-          ? "உங்கள் குரல் உரையாக மாற்றப்பட்டது. பரிந்துரைக்கப்பட்ட பகுதியைத் திறக்கலாம்."
-          : "மாதிரி உரை தேர்ந்தெடுக்கப்பட்டது. பரிந்துரைக்கப்பட்ட பகுதியைத் திறக்கலாம்."
-        : wasSpoken
-          ? "Speech converted to text. Review it, then open the suggested section."
-          : "Suggested text selected. Review it, then open the suggested section.",
-    );
     setMicError("");
+    setIsProcessing(true);
+    try {
+      const answer = await askAgriAssistant(promptText, [], language as any);
+      setAssistantReply(answer);
+    } catch {
+      setAssistantReply(
+        language === "ta"
+          ? "பரிந்துரைக்கப்பட்ட பகுதிக்கு செல்லலாம்."
+          : "Navigating to recommended section.",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const toggleMic = () => {
@@ -273,7 +279,7 @@ export const VoiceAssistantModal: React.FC = () => {
           )}
 
           {/* Transcript / Reply Display */}
-          {(transcript || assistantReply) && (
+          {(transcript || assistantReply || isProcessing) && (
             <div className="w-full p-4 mb-6 bg-white rounded-2xl border border-sage-300 text-left shadow-sm">
               {transcript && (
                 <div className="flex items-start gap-2 mb-2">
@@ -285,10 +291,20 @@ export const VoiceAssistantModal: React.FC = () => {
                   </p>
                 </div>
               )}
-              {assistantReply && (
+              {isProcessing && (
+                <div className="flex items-center gap-2 pt-2 border-t border-sage-200 text-xs font-bold text-forest-700 animate-pulse">
+                  <Sparkles className="w-4 h-4 text-paddy-600 animate-spin" />
+                  <span>
+                    {language === "ta"
+                      ? "வேளாண் ஆலோசனை தயாராகிறது..."
+                      : "Consulting agronomic knowledge base..."}
+                  </span>
+                </div>
+              )}
+              {assistantReply && !isProcessing && (
                 <div className="flex items-start gap-2 pt-2 border-t border-sage-200">
                   <Volume2 className="w-4 h-4 text-paddy-600 shrink-0 mt-0.5" />
-                  <p className="text-sm font-semibold text-forest-800">
+                  <p className="text-sm font-semibold text-forest-800 whitespace-pre-line">
                     {assistantReply}
                   </p>
                 </div>

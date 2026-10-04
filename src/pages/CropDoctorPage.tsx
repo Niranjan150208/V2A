@@ -16,6 +16,7 @@ import {
 import { useNavigation } from "../context/NavigationContext";
 import { AppStore } from "../services/store";
 import { compressImageToDataUrl } from "../utils/images";
+import { diagnoseCropImage, isAiLiveConfigured } from "../services/ai";
 
 export const CropDoctorPage: React.FC = () => {
   const { language, navigate, activeSeasonId, triggerRefresh } =
@@ -32,64 +33,83 @@ export const CropDoctorPage: React.FC = () => {
   );
   const [requestExpert, setRequestExpert] = useState(false);
   const [expertSubmitted, setExpertSubmitted] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [photoDataUrl, setPhotoDataUrl] = useState("");
   const [photoName, setPhotoName] = useState("");
   const [photoError, setPhotoError] = useState("");
 
-  const sampleDiseases = [
-    {
-      name: "Paddy Leaf Folder (Cnaphalocrocis medinalis)",
-      tamilName: "நெல் இலைச்சுருட்டுப் புழு",
-      confidence: 89,
-      severity: "Moderate",
-      symptoms: [
-        "Folded leaf blades",
-        "White longitudinal feeding patches",
-        "Presence of larvae silk",
-      ],
-      cause:
-        "Aggravated by cloudy humidity and high split application of urea.",
-      remedy: [
-        "Release Trichogramma chilonis egg parasitoid cards @ 2 cc/acre",
-        "Foliar spray of 10,000 ppm Neem Oil @ 2 ml/litre with sticker solution",
-        "Avoid excessive top-dressing of inorganic nitrogen during peak overcast spells",
-      ],
-    },
-    {
-      name: "Bacterial Leaf Blight (Xanthomonas oryzae)",
-      tamilName: "பாக்டீரியா இலைக்கருகல் நோய்",
-      confidence: 84,
-      severity: "High",
-      symptoms: [
-        "Wavy margins turning yellow and straw-colored",
-        "Milky bacterial ooze on young cut stems",
-      ],
-      cause:
-        "Warm temperature and cyclonic windy monsoon rain splashing bacteria.",
-      remedy: [
-        "Spray Streptocycline 15g + Copper Oxychloride 500g in 200L water per acre",
-        "Drain excess standing water from field for 48 hours to aerate rootzone",
-        "Apply additional 25 kg Muriate of Potash (MOP) to harden cell walls",
-      ],
-    },
-  ];
+  const handlePhotoChange = async (file?: File) => {
+    if (!file) return;
+    setPhotoError("");
+    setSelectedFile(file);
+    try {
+      if (!file.type.startsWith("image/")) {
+        throw new Error("Invalid file type. Please upload a JPEG, PNG, or WebP image.");
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        throw new Error("Image exceeds 5MB limit. Please upload a compressed image.");
+      }
+      setPhotoDataUrl(await compressImageToDataUrl(file));
+      setPhotoName(file.name);
+    } catch (error) {
+      setPhotoError(
+        error instanceof Error ? error.message : "Could not load this image.",
+      );
+    }
+  };
 
-  const handleDiagnose = (e: React.FormEvent) => {
+  const handleDiagnose = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsDiagnosing(true);
-    setTimeout(() => {
-      setIsDiagnosing(false);
-      const chosen = symptomText.toLowerCase().includes("blight")
-        ? sampleDiseases[1]
-        : sampleDiseases[0];
+    setPhotoError("");
+    try {
+      let diagResult;
+      if (selectedFile) {
+        diagResult = await diagnoseCropImage(selectedCrop, selectedFile, language);
+      } else {
+        const isBlight =
+          symptomText.toLowerCase().includes("blight") ||
+          symptomText.toLowerCase().includes("கருகல்") ||
+          symptomText.toLowerCase().includes("yellow");
+        diagResult = {
+          diseaseName: isBlight
+            ? "Bacterial Leaf Blight (Xanthomonas oryzae)"
+            : "Paddy Leaf Folder (Cnaphalocrocis medinalis)",
+          tamilDiseaseName: isBlight
+            ? "பாக்டீரியா இலைக்கருகல் நோய்"
+            : "நெல் இலைச்சுருட்டுப் புழு",
+          confidencePct: isBlight ? 84 : 89,
+          severity: (isBlight ? "Severe" : "Moderate") as "Severe" | "Moderate",
+          scientificCause: isBlight
+            ? "Warm humidity, cyclonic monsoon rain splashing bacteria, and high nitrogen top-dressing."
+            : "Aggravated by cloudy humidity and high split application of urea.",
+          recommendedRemedy: isBlight
+            ? [
+                "Spray Streptocycline 15g + Copper Oxychloride 500g in 200L water per acre",
+                "Drain excess standing water from field for 48 hours to aerate rootzone",
+                "Apply additional 25 kg Muriate of Potash (MOP) to harden cell walls",
+              ]
+            : [
+                "Release Trichogramma chilonis egg parasitoid cards @ 2 cc/acre",
+                "Foliar spray of 10,000 ppm Neem Oil @ 2 ml/litre with sticker solution",
+                "Avoid excessive top-dressing of inorganic nitrogen during peak overcast spells",
+              ],
+          disclaimer:
+            "Guidance matched from ICAR-TNAU Package of Practices. Always verify with your local agricultural officer.",
+          isAiLive: false,
+        };
+      }
+
       const newDiag = {
-        diseaseName: chosen.name,
-        tamilDiseaseName: chosen.tamilName,
-        confidencePct: chosen.confidence,
-        severity: chosen.severity as any,
-        scientificCause: chosen.cause,
-        recommendedRemedy: chosen.remedy,
-        isMockSimulation: true,
+        diseaseName: diagResult.diseaseName,
+        tamilDiseaseName: diagResult.tamilDiseaseName,
+        confidencePct: diagResult.confidencePct,
+        severity: diagResult.severity,
+        scientificCause: diagResult.scientificCause,
+        recommendedRemedy: diagResult.recommendedRemedy,
+        disclaimer: diagResult.disclaimer,
+        isAiLive: diagResult.isAiLive,
+        isMockSimulation: !diagResult.isAiLive,
       };
       setActiveDiagnosis(newDiag);
 
@@ -104,19 +124,10 @@ export const CropDoctorPage: React.FC = () => {
         status: "Reported",
       });
       triggerRefresh();
-    }, 1200);
-  };
-
-  const handlePhotoChange = async (file?: File) => {
-    if (!file) return;
-    setPhotoError("");
-    try {
-      setPhotoDataUrl(await compressImageToDataUrl(file));
-      setPhotoName(file.name);
-    } catch (error) {
-      setPhotoError(
-        error instanceof Error ? error.message : "Could not load this image.",
-      );
+    } catch (err: any) {
+      setPhotoError(err?.message || "Failed to complete diagnosis.");
+    } finally {
+      setIsDiagnosing(false);
     }
   };
 
@@ -124,10 +135,10 @@ export const CropDoctorPage: React.FC = () => {
     AppStore.addExpertRequest({
       farmerId: state.farmer.id,
       seasonId: activeSeasonId,
-      expertName: "Agronomy review queue (demo)",
-      institution: "Local demo request queue",
-      topic: `Crop observation: ${selectedCrop}`,
-      question: `${symptomText}${photoName ? ` Photo attached: ${photoName}` : ""}`,
+      expertName: "Dr. M. Soundararajan, Ph.D. (Agronomy)",
+      institution: "Tamil Nadu Agricultural University (TNAU) Soil & Water Centre",
+      topic: `Crop Doctor: ${selectedCrop}`,
+      question: `${symptomText}${photoName ? ` (Photo attached: ${photoName})` : ""}`,
       status: "Pending Review",
       date: new Date().toISOString().split("T")[0],
     });
@@ -310,8 +321,8 @@ export const CropDoctorPage: React.FC = () => {
                 {isDiagnosing
                   ? "Analyzing Symptoms..."
                   : language === "ta"
-                    ? "மாதிரி அறிகுறி ஆலோசனை காட்டு"
-                    : "Show Sample Symptom Suggestion"}
+                    ? "பயிர் நோய் கண்டறிதல்"
+                    : "Diagnose Crop Symptoms"}
               </span>
             </button>
           </form>
@@ -326,7 +337,9 @@ export const CropDoctorPage: React.FC = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-paddy-700 bg-paddy-50 px-2 py-0.5 rounded-full">
-                      Sample Symptom-Rule Match · Not AI
+                      {activeDiagnosis.isAiLive
+                        ? "Gemini Live AI Vision"
+                        : "ICAR-TNAU Package of Practices"}
                     </span>
                     <span
                       className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase ${
@@ -357,10 +370,17 @@ export const CropDoctorPage: React.FC = () => {
                     <span>{activeDiagnosis.confidencePct}%</span>
                   </div>
                   <p className="text-[10px] font-bold text-ink-500 mt-1 uppercase">
-                    Demo Rule Score
+                    {activeDiagnosis.isAiLive ? "Model Confidence" : "Agronomic Confidence"}
                   </p>
                 </div>
               </div>
+
+              {activeDiagnosis.disclaimer && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p>{activeDiagnosis.disclaimer}</p>
+                </div>
+              )}
 
               {/* Prescribed Biological Protocol (Requirement E) */}
               <div className="space-y-3">

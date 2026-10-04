@@ -29,6 +29,7 @@ export const DashboardPage: React.FC = () => {
   const t = translations[language];
 
   const state = AppStore.getState();
+  const isDemoAccount = state.currentUser.id === "USER-VIJAY-DEMO";
   const activeSeason =
     state.seasons.find((s) => s.id === activeSeasonId) || state.seasons[0];
   const financials = AppStore.calculateSeasonFinancials(activeSeason.id);
@@ -123,16 +124,20 @@ export const DashboardPage: React.FC = () => {
               </span>
             </button>
 
-            <button
-              onClick={handleResetDemo}
-              title="Clear local demo edits and restart the harvest-to-sale walkthrough"
-              className="flex items-center gap-2 rounded-xl border border-cream-100/30 bg-forest-950/30 px-4 py-2.5 text-xs font-bold text-cream-100 transition-colors hover:bg-forest-950/60"
-            >
-              <RotateCcw className="h-4 w-4" />
-              <span>
-                {language === "ta" ? "டெமோவை மீட்டமை" : "Reset demo journey"}
-              </span>
-            </button>
+            {isDemoAccount && (
+              <button
+                onClick={handleResetDemo}
+                title="Clear local demo edits and restart the harvest-to-sale walkthrough"
+                className="flex items-center gap-2 rounded-xl border border-cream-100/30 bg-forest-950/30 px-4 py-2.5 text-xs font-bold text-cream-100 transition-colors hover:bg-forest-950/60"
+              >
+                <RotateCcw className="h-4 w-4" />
+                <span>
+                  {language === "ta"
+                    ? "டெமோவை மீட்டமை"
+                    : "Reset demo journey"}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 

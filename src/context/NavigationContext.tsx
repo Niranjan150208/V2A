@@ -1,10 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useState, useEffect } from "react";
 import { Language } from "../types";
 import { AppStore } from "../services/store";
 
 export type AppRoute =
   | "/"
   | "/login"
+  | "/signup"
+  | "/forgot-password"
+  | "/reset-password"
   | "/onboarding"
   | "/dashboard"
   | "/my-farm"
@@ -62,15 +65,19 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({
 }) => {
   // Read initial route from location hash or pathname
   const getInitialRoute = (): AppRoute => {
-    const hash = window.location.hash.replace("#", "");
+    const fullHash = window.location.hash;
+    if (fullHash.includes("type=recovery")) {
+      return "/reset-password";
+    }
+    const hash = fullHash.replace("#", "");
     if (hash && hash.startsWith("/")) {
-      return hash as AppRoute;
+      return hash.split(/[?#&]/, 1)[0] as AppRoute;
     }
     const path = window.location.pathname;
     if (path && path !== "/" && path.length > 1) {
       return path as AppRoute;
     }
-    return "/dashboard"; // Default to central dashboard for quick access
+    return "/dashboard";
   };
 
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(getInitialRoute);
@@ -83,13 +90,19 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
-  const triggerRefresh = () => setRefreshTrigger((prev) => prev + 1);
+  const triggerRefresh = () => {
+    const currentState = AppStore.getState();
+    setLanguageState(currentState.language);
+    setActiveSeasonIdState(currentState.activeSeasonId);
+    setRefreshTrigger((prev) => prev + 1);
+  };
 
-  const navigate = (route: AppRoute) => {
+  const navigate = useCallback((route: AppRoute) => {
+    if (import.meta.env.DEV) console.debug(`[ROUTE] Navigating to ${route}.`);
     window.location.hash = route;
     setCurrentRoute(route);
     window.scrollTo({ top: 0, behavior: "smooth" });
-  };
+  }, []);
 
   const setLanguage = (lang: Language) => {
     AppStore.setLanguage(lang);
@@ -105,9 +118,17 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.replace("#", "");
+      const fullHash = window.location.hash;
+      if (fullHash.includes("type=recovery")) {
+        setCurrentRoute("/reset-password");
+        return;
+      }
+      if (fullHash.includes("access_token=") || fullHash.includes("error_description=")) {
+        return;
+      }
+      const hash = fullHash.replace("#", "");
       if (hash && hash.startsWith("/")) {
-        setCurrentRoute(hash as AppRoute);
+        setCurrentRoute(hash.split(/[?#&]/, 1)[0] as AppRoute);
       } else {
         const path = window.location.pathname;
         setCurrentRoute(

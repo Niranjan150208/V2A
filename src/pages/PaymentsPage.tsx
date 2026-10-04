@@ -86,13 +86,13 @@ export const PaymentsPage: React.FC = () => {
         <div className="space-y-0.5">
           <p className="font-bold">
             {language === "ta"
-              ? "கணக்கியல் விதிமுறை (Accounting Integrity):"
-              : "Strict Cashflow Recognition Principle:"}
+              ? "மாதிரி பணவரவு உருவகப்படுத்துதல் (Simulation Only):"
+              : "Demo only — no real bank transaction is performed."}
           </p>
           <p className="text-ink-600 leading-relaxed">
             {language === "ta"
-              ? "வரவேண்டிய நிலுவைத் தொகைகள் வங்கியில் பெறப்படும் வரை பெறப்பட்ட வருமானமாக கணக்கிடப்படாது. உண்மையான வங்கிப் பணப்புழக்கம் மட்டுமே லாபமாக அங்கீகரிக்கப்படும்."
-              : "In this demo, pending amounts stay separate until you mark them received. This only updates the local ledger; it does not verify a bank deposit."}
+              ? "வரவேண்டிய நிலுவைத் தொகைகள் வங்கியில் பெறப்படும் வரை பெறப்பட்ட வருமானமாக கணக்கிடப்படாது. இந்த உருவகப்படுத்துதல் உள்ளூர் கணக்கியல் பதிவை மட்டுமே மாற்றும்; உண்மையான வங்கிப் பரிவர்த்தனை நடைபெறாது."
+              : "Simulate Bank Credit only changes the application's local payment ledger for hackathon evaluation and does NOT perform an actual bank transfer."}
           </p>
         </div>
       </div>
@@ -218,14 +218,14 @@ export const PaymentsPage: React.FC = () => {
                       {settlingId === p.id ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Settling...</span>
+                          <span>Simulating credit...</span>
                         </>
                       ) : (
                         <>
                           <CheckCircle2 className="w-3.5 h-3.5 text-harvest-400" />
                           <span>
                             {language === "ta"
-                              ? "வங்கி வரவு பதிவு செய்"
+                              ? "வங்கி வரவு உருவகப்படுத்து"
                               : "Simulate Bank Credit"}
                           </span>
                         </>

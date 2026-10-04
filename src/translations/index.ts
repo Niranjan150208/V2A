@@ -1,6 +1,6 @@
 import { Language } from '../types';
 
-export const translations = {
+const baseTranslations = {
   en: {
     app: {
       name: 'VITHAI TO ARUVADAI (V2A)',
@@ -193,4 +193,11 @@ export const translations = {
       pendingWarning: 'நிலுவையில் உள்ள தொகைகள் வங்கியில் வரும் வரை பெறப்பட்ட வருமானமாக சேர்க்கப்படாது.',
     }
   }
+};
+
+export const translations: Record<Language, typeof baseTranslations.en> = {
+  en: baseTranslations.en,
+  ta: baseTranslations.ta,
+  hi: baseTranslations.en,
+  te: baseTranslations.en,
 };

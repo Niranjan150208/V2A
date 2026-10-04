@@ -24,8 +24,8 @@ export const BuyerDiscoveryPage: React.FC = () => {
           </h1>
           <p className="text-xs text-ink-500">
             {language === 'ta'
-              ? 'சரிபார்க்கப்பட்ட நவீன அரிசி ஆலைகள், உழவர் உற்பத்தியாளர் நிறுவனங்கள் மற்றும் அரசு நேரடி கொள்முதல் நிலையங்கள்'
-              : 'Pre-vetted food processing aggregators with verified GST and swift electronic settlement'}
+              ? 'மாதிரி கொள்முதல் நிறுவனங்கள், உழவர் உற்பத்தியாளர் நிறுவனங்கள் மற்றும் நேரடி கொள்முதல் மையங்கள் (Demo)'
+              : 'Demonstration catalog of regional food aggregators, millers, and procurement centers'}
           </p>
         </div>
 

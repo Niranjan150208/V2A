@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   Sprout,
@@ -38,13 +38,17 @@ import {
   RotateCw,
   Landmark,
   LogIn,
+  LogOut,
   UserPlus,
   PlayCircle,
+  Bell,
 } from "lucide-react";
 import { useNavigation, AppRoute } from "../../context/NavigationContext";
 import { Logo } from "../brand/Logo";
 import { translations } from "../../translations";
 import { AppStore } from "../../services/store";
+import { useAuth } from "../../context/AuthContext";
+import { NotificationsModal } from "./NotificationsModal";
 
 interface NavItem {
   id: string;
@@ -77,11 +81,53 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({
   const [collapsedGroups, setCollapsedGroups] = useState<
     Record<string, boolean>
   >({});
+  const { session, demoMode, signOut } = useAuth();
+  const [syncStatus, setSyncStatus] = useState(AppStore.getSyncStatus());
+  const [signOutError, setSignOutError] = useState("");
+  const [syncRetrying, setSyncRetrying] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  useEffect(() => AppStore.subscribeToSyncStatus(setSyncStatus), []);
+
+  const handleSignOut = async () => {
+    setSignOutError("");
+    try {
+      const warning = await signOut();
+      navigate("/login");
+      if (warning) setSignOutError(warning);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error("Sign out did not complete", error);
+      setSignOutError(
+        error instanceof Error ? error.message : "We couldn't complete sign-out. Please try again.",
+      );
+    }
+  };
+
+  const retryCloudSync = async () => {
+    setSyncRetrying(true);
+    setSignOutError("");
+    try {
+      await AppStore.flushCloudSync();
+    } catch (error) {
+      setSignOutError(
+        error instanceof Error ? error.message : "Cloud sync failed. Please try again.",
+      );
+    } finally {
+      setSyncRetrying(false);
+    }
+  };
 
   const t = translations[language];
   const state = AppStore.getState();
   const activeSeason =
-    state.seasons.find((s) => s.id === activeSeasonId) || state.seasons[0];
+    state.seasons.find((s) => s.id === activeSeasonId) ||
+    state.seasons[0] || {
+      id: "CR-DEFAULT",
+      seasonCode: "CR-DEFAULT",
+      cropName: "Paddy (Samba)",
+      variety: "CR 1009 Sub 1",
+      tamilCropName: "நெல்",
+    };
 
   const navGroups: NavGroup[] = [
     {
@@ -316,19 +362,64 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({
       {/* Top Banner / Announcement */}
       <div className="bg-forest-900 text-cream-100 text-xs py-1.5 px-4 flex items-center justify-between border-b border-forest-800">
         <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
-          <span className="bg-harvest-500 text-forest-950 font-bold px-1.5 py-0.2 rounded text-[10px]">
-            {t.app.betaBadge}
-          </span>
+          {demoMode ? (
+            <span className="bg-amber-400 text-forest-950 font-extrabold px-2 py-0.5 rounded text-[11px] uppercase tracking-wider flex items-center gap-1 shadow-sm">
+              <Sparkles className="w-3 h-3 text-forest-950" />
+              DEMO MODE • VIJAY
+            </span>
+          ) : (
+            <span className="bg-harvest-500 text-forest-950 font-bold px-1.5 py-0.2 rounded text-[10px]">
+              {t.app.betaBadge}
+            </span>
+          )}
           <span className="hidden sm:inline font-medium">
-            {language === "ta"
-              ? "விதை முதல் அறுவடை வரை: தமிழக விவசாயிகளுக்கான ஒருங்கிணைந்த தளம்"
-              : "Cauvery Delta Pilot: Full Seed-to-Settlement Lifecycle Active"}
+            {demoMode
+              ? language === "ta"
+                ? "டெமோ முறை: மாதிரி தரவு மட்டுமே · கிளவுட் சேமிப்பு இல்லை"
+                : "Hackathon Demonstration Mode • Local Browser Data Only • No Cloud Sync"
+              : language === "ta"
+                ? "விதை முதல் அறுவடை வரை: தமிழக விவசாயிகளுக்கான ஒருங்கிணைந்த தளம்"
+                : "Cauvery Delta Pilot: Full Seed-to-Settlement Lifecycle Active"}
           </span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-1.5 text-sage-300 text-[11px]">
-            <Wifi className="w-3.5 h-3.5 text-paddy-400" />
-            <span className="hidden md:inline">{t.app.offlineSync}</span>
+            <Wifi
+              className={`w-3.5 h-3.5 ${
+                demoMode
+                  ? "text-amber-400"
+                  : syncStatus === "error"
+                    ? "text-terracotta-300"
+                    : syncStatus === "offline"
+                      ? "text-amber-300"
+                      : "text-paddy-400"
+              }`}
+            />
+            <span className="hidden md:inline font-medium">
+              {demoMode
+                ? "DEMO (Local only)"
+                : syncStatus === "syncing"
+                  ? "Saving to cloud…"
+                  : syncStatus === "synced"
+                    ? "Cloud Synced"
+                    : syncStatus === "offline"
+                      ? "Offline • Local cache active"
+                      : syncStatus === "error"
+                        ? "Sync Error"
+                        : "Cloud Ready"}
+            </span>
+            {!demoMode && (syncStatus === "error" || syncStatus === "offline") && (
+                        <button
+                          type="button"
+                          onClick={() => void retryCloudSync()}
+                          disabled={syncRetrying}
+                          className="inline-flex items-center gap-1 rounded-md border border-sage-500/40 px-2 py-1 text-[10px] font-bold text-cream-50 hover:bg-white/10 disabled:opacity-60"
+                          aria-label="Retry cloud sync"
+                        >
+                          <RotateCw className={`h-3 w-3 ${syncRetrying ? "animate-spin" : ""}`} />
+                          Retry
+                        </button>
+            )}
           </div>
           <button
             onClick={() => setLanguage(language === "en" ? "ta" : "en")}
@@ -378,14 +469,18 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({
                   onChange={(e) => setActiveSeasonId(e.target.value)}
                   className="bg-transparent text-xs font-bold text-forest-900 border-none outline-none cursor-pointer pr-2"
                 >
-                  {state.seasons.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {language === "ta"
-                        ? s.tamilCropName || s.cropName
-                        : s.cropName}{" "}
-                      ({s.variety.split("(")[0]})
-                    </option>
-                  ))}
+                  {state.seasons.length > 0 ? (
+                    state.seasons.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {language === "ta"
+                          ? s.tamilCropName || s.cropName
+                          : s.cropName}{" "}
+                        ({s.variety.split("(")[0]})
+                      </option>
+                    ))
+                  ) : (
+                    <option value="">No Active Seasons</option>
+                  )}
                 </select>
               </div>
             </div>
@@ -411,7 +506,44 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({
               <span>{language === "ta" ? "முழு பயணம்" : "Full Journey"}</span>
             </button>
 
+            {/* Notification Bell */}
+            <button
+              onClick={() => setIsNotificationsOpen(true)}
+              className="relative p-2 text-forest-800 hover:bg-sage-100 rounded-xl transition-colors border border-sage-300"
+              title="Notifications & Alerts"
+              aria-label="View notifications"
+            >
+              <Bell className="w-4 h-4 text-forest-800" />
+              {(state.notifications || []).filter((n) => !n.read).length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-terracotta-500 text-white font-black text-[9px] w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                  {(state.notifications || []).filter((n) => !n.read).length > 9
+                    ? "9+"
+                    : (state.notifications || []).filter((n) => !n.read).length}
+                </span>
+              )}
+            </button>
+
             {/* Farmer Avatar & Profile Link */}
+            {(session || demoMode) && (
+              <button
+                onClick={() => void handleSignOut()}
+                aria-label={demoMode ? "Exit demo mode" : "Sign out"}
+                title={demoMode ? "Exit demo mode" : "Sign out"}
+                className="flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-bold text-ink-600 hover:bg-sage-100 hover:text-forest-900 border border-sage-300 transition-colors"
+              >
+                {demoMode ? (
+                  <>
+                    <LogIn className="h-4 w-4 text-amber-600" />
+                    <span className="hidden sm:inline">Exit Demo</span>
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="h-4 w-4 text-ink-500" />
+                    <span className="hidden sm:inline">Sign Out</span>
+                  </>
+                )}
+              </button>
+            )}
             <button
               onClick={() => navigate("/profile")}
               className="flex items-center gap-2 pl-2 border-l border-sage-300 hover:opacity-85 transition-opacity"
@@ -426,13 +558,25 @@ export const AppLayout: React.FC<{ children: React.ReactNode }> = ({
                     : state.currentUser.name}
                 </span>
                 <span className="text-[10px] text-paddy-700 font-medium">
-                  {state.farmer.village}, {state.farmer.district}
+                  {demoMode
+                    ? "Demo account (VIJAY)"
+                    : session?.user.email ||
+                      `${state.farmer.village}, ${state.farmer.district}`}
                 </span>
               </div>
             </button>
           </div>
         </div>
       </header>
+
+      {signOutError && (
+        <p
+          role="status"
+          className="mx-auto mt-3 w-[calc(100%-2rem)] max-w-7xl rounded-xl border border-terracotta-300 bg-terracotta-50 px-4 py-2 text-xs font-semibold text-terracotta-800"
+        >
+          {signOutError}
+        </p>
+      )}
 
       {/* Main Body with Sidebar + Content */}
       <div className="flex-1 flex max-w-7xl mx-auto w-full">

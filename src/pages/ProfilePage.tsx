@@ -17,6 +17,7 @@ export const ProfilePage: React.FC = () => {
   const { language, setLanguage, navigate, triggerRefresh } = useNavigation();
   const state = AppStore.getState();
   const farmer = state.farmer;
+  const isDemoAccount = state.currentUser.id === "USER-VIJAY-DEMO";
 
   const handleResetDemo = () => {
     if (
@@ -40,29 +41,38 @@ export const ProfilePage: React.FC = () => {
           <div className="inline-flex items-center gap-1.5 text-xs font-bold text-paddy-700 uppercase tracking-wider mb-1">
             <User className="w-4 h-4 text-paddy-600" />
             <span>
-              {language === "ta"
-                ? "டெமோ விவசாயி சுயவிவரம்"
-                : "Demo Farmer Profile"}
+              {isDemoAccount
+                ? language === "ta"
+                  ? "டெமோ விவசாயி சுயவிவரம்"
+                  : "Demo Farmer Profile"
+                : language === "ta"
+                  ? "விவசாயி சுயவிவரம்"
+                  : "Farmer Profile"}
             </span>
           </div>
           <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-forest-900">
             {language === "ta" ? farmer.tamilFullName : farmer.fullName}
           </h1>
           <p className="text-xs text-ink-500">
-            Demo account: {state.currentUser.name} • {state.currentUser.phone} •
-            Farmer
+            {isDemoAccount
+              ? `Demo account: ${state.currentUser.name} • ${state.currentUser.phone} • Farmer`
+              : `Signed in as: ${state.currentUser.name} • ${state.currentUser.phone}`}
           </p>
         </div>
 
-        <button
-          onClick={handleResetDemo}
-          className="px-4 py-2 bg-cream-100 hover:bg-cream-200 text-ink-700 font-bold text-xs rounded-xl border border-sage-300 flex items-center gap-1.5 transition-colors"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-terracotta-600" />
-          <span>
-            {language === "ta" ? "மாதிரி நிலையை மீட்டமை" : "Reset Demo Data"}
-          </span>
-        </button>
+        {isDemoAccount && (
+          <button
+            onClick={handleResetDemo}
+            className="px-4 py-2 bg-cream-100 hover:bg-cream-200 text-ink-700 font-bold text-xs rounded-xl border border-sage-300 flex items-center gap-1.5 transition-colors"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-terracotta-600" />
+            <span>
+              {language === "ta"
+                ? "மாதிரி நிலையை மீட்டமை"
+                : "Reset Demo Data"}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Profile Overview Card */}
@@ -79,7 +89,9 @@ export const ProfilePage: React.FC = () => {
                 </h3>
                 <span className="bg-paddy-100 text-paddy-800 text-xs font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-paddy-600" />
-                  Demo Only · Not KYC Verified
+                  {isDemoAccount
+                    ? "Demo Only · Not KYC Verified"
+                    : "Account signed in · Not KYC Verified"}
                 </span>
               </div>
               <p className="text-xs text-ink-600 font-tamil mt-0.5">
@@ -103,10 +115,12 @@ export const ProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 space-y-1">
             <span className="text-ink-500 font-bold block uppercase text-[10px]">
-              Contact & Location
+              {isDemoAccount ? "Contact & Location" : "Account & Sample Location"}
             </span>
             <p className="font-bold text-forest-900">
-              {state.currentUser.phone} (demo number)
+              {isDemoAccount
+                ? `${state.currentUser.phone} (demo number)`
+                : state.currentUser.phone}
             </p>
             <p className="text-ink-600">
               {farmer.village}, {farmer.taluk}, {farmer.district},{" "}
@@ -141,7 +155,9 @@ export const ProfilePage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 text-xs">
           <section className="rounded-2xl border border-sage-200 bg-cream-50 p-4 space-y-2">
             <h3 className="font-bold uppercase tracking-wide text-ink-600">
-              Land parcels (demo data)
+              {isDemoAccount
+                ? "Land parcels (demo data)"
+                : "Sample land parcels"}
             </h3>
             {state.farm.parcels.map((parcel) => (
               <div
@@ -180,9 +196,9 @@ export const ProfilePage: React.FC = () => {
         </div>
 
         <p className="rounded-xl border border-harvest-300 bg-harvest-50 p-3 text-xs text-forest-900">
-          These are sample demo records stored only in this browser. Phone,
-          land, card, and benefit identifiers are not authenticated or verified;
-          do not enter sensitive real information.
+          {isDemoAccount
+            ? "These are sample demo records stored only in this browser. Phone, land, card, and benefit identifiers are not authenticated or verified; do not enter sensitive real information."
+            : "Your sign-in is connected to your personal account. Farm, land, crop, and financial details currently shown are sample starter records, not verified personal data. Replace them before use; do not enter sensitive real information."}
         </p>
 
         {/* Language Preference Section */}

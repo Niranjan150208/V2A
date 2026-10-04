@@ -20,6 +20,8 @@ For camera and microphone access, open the deployed HTTPS URL or `http://localho
 - Demo farmer: **VIJAY**
 - Demo phone: `9000000421`
 - Demo OTP: `4210` (local UI demo only; no SMS or real authentication)
+- Personal accounts: configure Supabase using [CLOUD_SYNC_SETUP.txt](CLOUD_SYNC_SETUP.txt), then use the email/password sign-up and sign-in options. Demo access remains a separate local-only session.
+- A new personal account starts with blank farm and transaction records plus a clearly labeled starter planning template; it does not inherit VIJAY's demo records.
 - Crop and soil images are compressed and stored with the local browser demo record. They are not uploaded to a server or sent to an AI model.
 - Soil pH/N/P/K values must be entered from a test kit or laboratory result; a photo cannot measure soil chemistry.
 
@@ -37,7 +39,7 @@ The trade walkthrough is replayable, persists across reloads in the same browser
 
 ## Current integration boundary
 
-This is a front-end hackathon prototype. Farmer, buyer, weather, crop-diagnosis, offer, and payment data are demo/simulated data. Records are stored per browser; they are not shared between users or devices. The payment action only updates the local demo ledger and does not initiate a bank transfer. Login does not provide production authentication. No government, bank, weather, or AI service is connected.
+This is a front-end hackathon prototype. Farmer, buyer, weather, crop-diagnosis, offer, and payment data are demo/simulated data; shared sample catalogs may not reflect actual availability or prices. Without Supabase configuration, records are stored per browser; they are not shared between users or devices. With Supabase configured, email/password accounts use Supabase Authentication and each account's app state is stored separately with row-level security. Demo access is always separate and local-only. The payment action only updates the app ledger and does not initiate a bank transfer. No government, bank, weather, or AI service is connected.
 
 For a multi-user public product, connect a hosted backend (for example Supabase or Firebase), configure real authentication and role-based access, and integrate verified external data/services. Do not enter real identity, land, bank, or health information into this demo.
 

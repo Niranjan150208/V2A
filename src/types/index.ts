@@ -1,6 +1,16 @@
 // TypeScript interfaces for VITHAI TO ARUVADAI (V2A)
 
-export type Language = "en" | "ta";
+export type Language = "en" | "ta" | "hi" | "te";
+
+export type FarmerCategory =
+  | "Small farmer"
+  | "Medium farmer"
+  | "Large farmer"
+  | "Tenant farmer"
+  | "Agricultural land manager"
+  | "Other";
+
+export type CommunicationPreference = "SMS" | "WhatsApp" | "Phone Call" | "In-App";
 
 export type CropCategory =
   | "Cereal"
@@ -32,8 +42,10 @@ export type ExpenseCategory =
   | "Seeds"
   | "Fertilizers"
   | "Bio-Inputs"
+  | "Pesticides"
   | "Labour"
   | "Machinery"
+  | "Electricity"
   | "Irrigation"
   | "Transport"
   | "Storage"
@@ -45,7 +57,8 @@ export interface User {
   phone: string;
   name: string;
   tamilName?: string;
-  role: "farmer" | "buyer" | "expert" | "agri_officer";
+  email?: string;
+  role: "farmer" | "buyer" | "expert" | "agri_officer" | "admin";
   avatarUrl?: string;
 }
 
@@ -55,6 +68,11 @@ export interface FarmerProfile {
   fullName: string;
   tamilFullName: string;
   fatherName: string;
+  email?: string;
+  farmerCategory?: FarmerCategory;
+  preferredLanguage?: Language;
+  preferredCommunicationMethod?: CommunicationPreference;
+  avatarUrl?: string;
   village: string;
   taluk: string;
   district: string;
@@ -81,13 +99,24 @@ export interface LandParcel {
     | "Alluvial"
     | "Red Sandy Loam"
     | "Black Cotton"
-    | "Sandy";
+    | "Sandy"
+    | "Loamy"
+    | "Red soil"
+    | "Black soil"
+    | "Other"
+    | "Unknown"
+    | string;
   irrigationType:
     | "Canal"
     | "Borewell"
     | "Drip Irrigation"
     | "Open Well"
-    | "Rainfed";
+    | "Rainfed"
+    | "Rainwater"
+    | "Pond"
+    | "Sprinkler"
+    | "Other"
+    | string;
   locationName: string;
   geoCoordinates?: { lat: number; lng: number };
 }
@@ -96,11 +125,25 @@ export interface Farm {
   id: string;
   farmerId: string;
   farmName: string;
+  name?: string;
   village: string;
+  taluk?: string;
   district: string;
+  state?: string;
+  pincode?: string;
   parcels: LandParcel[];
   totalAreaAcres: number;
+  areaUnit?: "Acres" | "Hectares";
+  ownershipType?: "Owned" | "Leased" | "Shared" | "Tenant" | "Other";
+  soilType?: string;
+  irrigationSource?: string;
+  waterAvailability?: "Perennial" | "Seasonal" | "Deficit";
+  electricityAvailability?: "24 hrs" | "3-phase scheduled" | "Solar" | "None";
+  farmingMethod?: "Organic" | "Natural / ZBNF" | "Conventional" | "Mixed";
+  farmPhotographs?: string[];
+  geoCoordinates?: { lat: number; lng: number };
   activeSeasonsCount: number;
+  history?: { year: number; crop: string; yieldBags: number; notes: string }[];
 }
 
 export interface Crop {
@@ -329,13 +372,23 @@ export interface LabourBooking {
 export interface HarvestRecord {
   id: string;
   seasonId: string;
+  farmId?: string;
+  farmName?: string;
+  parcelId?: string;
+  parcelName?: string;
+  cropName?: string;
   harvestDate: string;
   actualQuantityBags: number;
   bagWeightKg: number;
   totalYieldKg: number;
   yieldPerAcreBags: number;
   moistureContentPct: number;
-  grainQualityGrade: "Grade A Super" | "Standard Common" | "Damaged / Wet";
+  grainQualityGrade: "Grade A Super" | "Standard Common" | "Damaged / Wet" | string;
+  unit?: "Bags" | "Quintals" | "Kgs";
+  damagedQuantity?: number;
+  storageDetails?: string;
+  photographs?: string[];
+  soldQuantityBags?: number;
   labourExpense: number;
   machineryExpense: number;
   transportToGodownExpense: number;
@@ -399,16 +452,38 @@ export interface ProduceListing {
   id: string;
   seasonId: string;
   farmerId: string;
+  farmerName?: string;
   cropName: string;
   variety: string;
   quantityBags: number;
   bagWeightKg: number;
+  unit?: string;
   askingPricePerBag: number;
   qualityGrade: string;
   moisturePct: number;
   pickupLocation: string;
+  district?: string;
   listingDate: string;
+  harvestDate?: string;
+  contactPreference?: "Phone" | "WhatsApp" | "In-App Enquiry";
+  photographs?: string[];
+  soldQuantity?: number;
   status: "Active" | "Under Negotiation" | "Sold" | "Unsold Relisted";
+}
+
+export interface MarketplaceEnquiry {
+  id: string;
+  listingId: string;
+  cropName: string;
+  buyerName: string;
+  buyerPhone: string;
+  buyerOrg?: string;
+  requestedQuantityBags: number;
+  offeredPricePerBag: number;
+  message: string;
+  date: string;
+  status: "Pending" | "Replied" | "Accepted" | "Declined";
+  replyMessage?: string;
 }
 
 export interface BuyerOffer {
@@ -475,6 +550,9 @@ export interface Payment {
 export interface Expense {
   id: string;
   seasonId: string;
+  farmId?: string;
+  farmName?: string;
+  cropName?: string;
   category: ExpenseCategory;
   description: string;
   tamilDescription?: string;
@@ -483,6 +561,48 @@ export interface Expense {
   paymentMode: "Cash" | "UPI" | "Credit / Due";
   paidTo: string;
   receiptNumber?: string;
+  receiptPhotoUrl?: string;
+}
+
+export type NotificationType =
+  | "task_reminder"
+  | "upcoming_activity"
+  | "overdue_task"
+  | "marketplace_enquiry"
+  | "listing_update"
+  | "weather_alert"
+  | "account";
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  tamilTitle?: string;
+  message: string;
+  tamilMessage?: string;
+  type: NotificationType;
+  read: boolean;
+  date: string;
+  link?: string;
+  priority?: "low" | "medium" | "high";
+}
+
+export interface NotificationPreferences {
+  taskReminders: boolean;
+  weatherAlerts: boolean;
+  marketplaceEnquiries: boolean;
+  cropUpdates: boolean;
+}
+
+export interface SuspiciousSeedReport {
+  id: string;
+  batchNumber: string;
+  productName: string;
+  brand: string;
+  seller: string;
+  reason: string;
+  reporterName: string;
+  date: string;
+  status: "Pending Investigation" | "Verified Fake" | "Cleared";
 }
 
 export interface GovernmentScheme {
@@ -549,7 +669,18 @@ export interface CropSeason {
     | "Harvest Ready"
     | "Harvested"
     | "Stored"
-    | "Sold & Settled";
+    | "Sold & Settled"
+    | "Land preparation"
+    | "Seed selection"
+    | "Germination"
+    | "Vegetative growth"
+    | "Nutrient management"
+    | "Irrigation"
+    | "Pest and disease monitoring"
+    | "Flowering or reproductive stage"
+    | "Harvest preparation"
+    | "Harvest"
+    | "Sale";
   targetYieldBags: number;
   allocatedBudget: number;
   seedBatchId?: string;

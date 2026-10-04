@@ -27,9 +27,24 @@ import {
   JourneyEvent,
   Language,
   User,
+  AppNotification,
+  MarketplaceEnquiry,
+  SuspiciousSeedReport,
+  NotificationPreferences,
+  LandParcel,
 } from "../types";
+import { supabase } from "./supabase";
 
-const STORAGE_KEY = "v2a_platform_state_v1";
+const DEMO_STORAGE_KEY = "v2a_demo_state";
+const STARTER_SEASON_NOTE =
+  "Starter template only. Choose your crop and enter your actual field details before using this plan.";
+
+export type CloudSyncStatus =
+  | "local"
+  | "syncing"
+  | "synced"
+  | "error"
+  | "offline";
 
 export interface AppState {
   language: Language;
@@ -37,6 +52,7 @@ export interface AppState {
   currentUser: User;
   farmer: FarmerProfile;
   farm: Farm;
+  farms: Farm[];
   crops: Crop[];
   seasons: CropSeason[];
   soilReports: SoilReport[];
@@ -60,7 +76,70 @@ export interface AppState {
   expenses: Expense[];
   schemes: GovernmentScheme[];
   journeyEvents: JourneyEvent[];
+  notifications: AppNotification[];
+  enquiries: MarketplaceEnquiry[];
+  suspiciousReports: SuspiciousSeedReport[];
+  notificationPreferences: NotificationPreferences;
   lastSyncTime: string;
+}
+
+const requiredStateArrays: (keyof AppState)[] = [
+  "crops",
+  "seasons",
+  "soilReports",
+  "seedBatches",
+  "inputProducts",
+  "inputPurchases",
+  "tasks",
+  "irrigations",
+  "cropObservations",
+  "expertRequests",
+  "machineryListings",
+  "labourBookings",
+  "harvestRecords",
+  "storageListings",
+  "transportListings",
+  "buyers",
+  "produceListings",
+  "buyerOffers",
+  "sales",
+  "payments",
+  "expenses",
+  "schemes",
+  "journeyEvents",
+];
+
+export function normalizeAppState(state: any): AppState {
+  if (!state.farms || !Array.isArray(state.farms) || state.farms.length === 0) {
+    state.farms = state.farm ? [state.farm] : [];
+  }
+  if (!Array.isArray(state.notifications)) state.notifications = [];
+  if (!Array.isArray(state.enquiries)) state.enquiries = [];
+  if (!Array.isArray(state.suspiciousReports)) state.suspiciousReports = [];
+  if (!state.notificationPreferences) {
+    state.notificationPreferences = {
+      taskReminders: true,
+      weatherAlerts: true,
+      marketplaceEnquiries: true,
+      cropUpdates: true,
+    };
+  }
+  return state as AppState;
+}
+
+function isAppState(value: unknown): value is AppState {
+  if (!value || typeof value !== "object") return false;
+  const state = value as AppState;
+  return (
+    typeof state.activeSeasonId === "string" &&
+    typeof state.currentUser === "object" &&
+    state.currentUser !== null &&
+    typeof state.farmer === "object" &&
+    state.farmer !== null &&
+    typeof state.farm === "object" &&
+    state.farm !== null &&
+    requiredStateArrays.every((key) => Array.isArray(state[key]))
+  );
 }
 
 const defaultState: AppState = {
@@ -130,6 +209,51 @@ const defaultState: AppState = {
       },
     ],
   },
+  farms: [
+    {
+      id: "FARM-DELTA-01",
+      farmerId: "FARMER-TN-0421",
+      farmName: "Cauvery Riverbed Fertile Vayal (காவிரி படுகை வயல்)",
+      village: "Thiruvaiyaru",
+      taluk: "Budalur",
+      district: "Thanjavur",
+      state: "Tamil Nadu",
+      pincode: "613204",
+      totalAreaAcres: 5.5,
+      areaUnit: "Acres",
+      ownershipType: "Owned",
+      soilType: "Clay Loam",
+      irrigationSource: "Canal",
+      waterAvailability: "Perennial",
+      electricityAvailability: "Solar",
+      farmingMethod: "Mixed",
+      activeSeasonsCount: 2,
+      parcels: [
+        {
+          id: "PARCEL-01",
+          surveyNumber: "142/3B",
+          subDivision: "3B",
+          pattaNumber: "PATTA-904",
+          acres: 3.5,
+          soilType: "Clay Loam",
+          irrigationType: "Canal",
+          locationName: "Keezha Theru Vayal (கிழக்கு நன்செய்)",
+          geoCoordinates: { lat: 10.8789, lng: 79.1024 },
+        },
+        {
+          id: "PARCEL-02",
+          surveyNumber: "145/1A",
+          subDivision: "1A",
+          pattaNumber: "PATTA-904",
+          acres: 2.0,
+          soilType: "Alluvial",
+          irrigationType: "Borewell",
+          locationName: "Vada Kaadu Parcel (வடக்கு தோட்டம்)",
+          geoCoordinates: { lat: 10.8812, lng: 79.1051 },
+        },
+      ],
+    },
+  ],
   crops: [
     {
       id: "CROP-PADDY-SAMBA",
@@ -1278,71 +1402,537 @@ const defaultState: AppState = {
       verifiedOfficial: true,
     },
   ],
+  notifications: [
+    {
+      id: "NOTIF-1",
+      title: "Weather Alert: Heavy showers forecast",
+      tamilTitle: "வானிலை எச்சரிக்கை: கனமழை வாய்ப்பு",
+      message: "Scattered showers predicted for Thanjavur district. Inspect bunds and drainage outlets.",
+      tamilMessage: "தஞ்சாவூர் மாவட்டத்தில் மழை வாய்ப்பு. வடிகால்களை கண்காணிக்கவும்.",
+      type: "weather_alert",
+      read: false,
+      date: "2026-01-16",
+      priority: "high",
+    },
+    {
+      id: "NOTIF-2",
+      title: "Crop Task: Leaf Folder Monitoring",
+      tamilTitle: "பயிர் பணி: இலைச்சுருட்டுப் புழு கண்காணிப்பு",
+      message: "Scheduled field scouting for pest eggs in parcel 142/3B.",
+      tamilMessage: "புழு முட்டை மற்றும் சேதத்தை வயலில் கண்காணிக்கவும்.",
+      type: "task_reminder",
+      read: false,
+      date: "2026-01-15",
+      priority: "medium",
+    },
+    {
+      id: "NOTIF-3",
+      title: "Buyer Enquiry for Samba Lot",
+      tamilTitle: "சாம்பா நெல்லுக்கு புதிய கொள்முதல் கோரிக்கை",
+      message: "Sri Meenakshi Agro Traders submitted an enquiry for 60 bags @ ₹2,320/bag.",
+      tamilMessage: "60 மூட்டைகளுக்கு புதிய கொள்முதல் விருப்பம் வந்துள்ளது.",
+      type: "marketplace_enquiry",
+      read: true,
+      date: "2026-01-14",
+      priority: "medium",
+    },
+  ],
+  enquiries: [
+    {
+      id: "ENQ-1",
+      listingId: "PROD-LIST-01",
+      cropName: "Paddy (CR 1009 Sub 1)",
+      buyerName: "Sri Meenakshi Agro Traders",
+      buyerPhone: "9842109845",
+      buyerOrg: "Thanjavur Rice Millers Association",
+      requestedQuantityBags: 60,
+      offeredPricePerBag: 2320,
+      message: "Interested in 60 bags of Grade A Super Samba paddy. Immediate bank NEFT on weighbridge inspection.",
+      date: "2026-01-14",
+      status: "Pending",
+    },
+  ],
+  suspiciousReports: [],
+  notificationPreferences: {
+    taskReminders: true,
+    weatherAlerts: true,
+    marketplaceEnquiries: true,
+    cropUpdates: true,
+  },
   lastSyncTime: new Date().toLocaleTimeString(),
 };
 
 export class AppStore {
+  private static inMemoryState: AppState | null = null;
+  private static cloudUserId: string | null = null;
+  private static cloudSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private static cloudSaveQueue: Promise<void> = Promise.resolve();
+  private static saveGeneration = 0;
+  private static syncStatus: CloudSyncStatus = "local";
+  private static syncListeners = new Set<(status: CloudSyncStatus) => void>();
+
   private static createDefaultState(): AppState {
     return JSON.parse(JSON.stringify(defaultState)) as AppState;
   }
 
-  private static loadState(): AppState {
+  private static getUserStorageKey(userId: string): string {
+    return `v2a_user_${userId}_state`;
+  }
+
+  private static getStorageKey(): string {
+    return this.cloudUserId
+      ? this.getUserStorageKey(this.cloudUserId)
+      : DEMO_STORAGE_KEY;
+  }
+
+  private static readUserState(userId: string): AppState | null {
+    const state = this.readStoredState(this.getUserStorageKey(userId));
+    if (!state) return null;
+    return state.currentUser.id === userId || state.farmer.userId === userId
+      ? state
+      : null;
+  }
+
+  private static isLegacyDemoSeed(state: AppState): boolean {
+    return state.farmer.id === "FARMER-TN-0421" && state.farm.id === "FARM-DELTA-01";
+  }
+
+  private static getSafeUserState(user: User, state: AppState | null): AppState {
+    return state && !this.isLegacyDemoSeed(state)
+      ? state
+      : this.createNewUserInitialState(user);
+  }
+
+  private static createNewUserInitialState(user: User): AppState {
+    const currentYear = new Date().getFullYear();
+    const seasonId = `CR-${currentYear}-SAMBA-01`;
+    const cleanId = user.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toUpperCase() || "NEW";
+    const farmerId = `FARMER-${cleanId}`;
+    const farmId = `FARM-${cleanId}`;
+    const today = new Date().toISOString().split("T")[0];
+    const harvestDate = new Date(Date.now() + 120 * 86400000)
+      .toISOString()
+      .split("T")[0];
+
+    const displayName = user.name && user.name.trim() ? user.name.trim() : "Farmer";
+    const displayTamilName =
+      user.tamilName && user.tamilName.trim()
+        ? user.tamilName.trim()
+        : displayName === "Farmer"
+          ? "விவசாயி"
+          : displayName;
+
+    return {
+      language: "en",
+      activeSeasonId: seasonId,
+      currentUser: {
+        id: user.id,
+        phone: user.phone || "",
+        name: displayName,
+        tamilName: displayTamilName,
+        role: "farmer",
+      },
+      farmer: {
+        id: farmerId,
+        userId: user.id,
+        fullName: displayName,
+        tamilFullName: displayTamilName,
+        fatherName: "",
+        village: "",
+        taluk: "",
+        district: "",
+        state: "",
+        pincode: "",
+        kisanCardNumber: "",
+        pmKisanBeneficiaryId: "",
+        totalLandAcres: 0,
+        primaryCrops: [],
+        soilTypes: [],
+        waterSources: [],
+        aadhaarVerified: false,
+        memberSince: today,
+      },
+      farm: {
+        id: farmId,
+        farmerId,
+        farmName: `${displayName}'s Farm`,
+        village: "",
+        district: "",
+        totalAreaAcres: 0,
+        areaUnit: "Acres",
+        activeSeasonsCount: 0,
+        parcels: [],
+      },
+      farms: [
+        {
+          id: farmId,
+          farmerId,
+          farmName: `${displayName}'s Farm`,
+          village: "",
+          district: "",
+          totalAreaAcres: 0,
+          areaUnit: "Acres",
+          activeSeasonsCount: 0,
+          parcels: [],
+        },
+      ],
+      crops: JSON.parse(JSON.stringify(defaultState.crops)),
+      seasons: [
+        {
+          id: seasonId,
+          seasonCode: seasonId,
+          cropId: "CROP-PADDY-SAMBA",
+          cropName: "Sample plan only — choose a crop",
+          tamilCropName: "மாதிரி திட்டம் — பயிரைத் தேர்ந்தெடுக்கவும்",
+          variety: "",
+          farmerId,
+          parcelId: "",
+          parcelName: "No parcel selected",
+          seasonName: "Samba (Main-Rabi)",
+          startDate: today,
+          sowingDate: today,
+          plannedHarvestDate: harvestDate,
+          areaAcres: 0,
+          targetYieldBags: 0,
+          stage: "Planning",
+          allocatedBudget: 0,
+          notes: STARTER_SEASON_NOTE,
+        },
+      ],
+      soilReports: [],
+      seedBatches: [],
+      inputProducts: JSON.parse(JSON.stringify(defaultState.inputProducts)),
+      inputPurchases: [],
+      tasks: [],
+      irrigations: [],
+      cropObservations: [],
+      expertRequests: [],
+      machineryListings: JSON.parse(JSON.stringify(defaultState.machineryListings)),
+      labourBookings: [],
+      harvestRecords: [],
+      storageListings: JSON.parse(JSON.stringify(defaultState.storageListings)),
+      transportListings: JSON.parse(JSON.stringify(defaultState.transportListings)),
+      buyers: JSON.parse(JSON.stringify(defaultState.buyers)),
+      produceListings: [],
+      buyerOffers: [],
+      sales: [],
+      payments: [],
+      expenses: [],
+      schemes: JSON.parse(JSON.stringify(defaultState.schemes)),
+      journeyEvents: [],
+      notifications: [
+        {
+          id: `NOTIF-${Date.now()}`,
+          title: "Welcome to V2A (Vithai to Aruvadai)!",
+          tamilTitle: "V2A உங்களை வரவேற்கிறது!",
+          message: "Get started by setting up your farm details in Onboarding, then plan your crops and monitor expenses.",
+          tamilMessage: "உங்கள் பண்ணை விவரங்களை பதிந்து பயிர் சாகுபடி திட்டமிடலை தொடங்குங்கள்.",
+          type: "account",
+          read: false,
+          date: today,
+          priority: "medium",
+        },
+      ],
+      enquiries: [],
+      suspiciousReports: [],
+      notificationPreferences: {
+        taskReminders: true,
+        weatherAlerts: true,
+        marketplaceEnquiries: true,
+        cropUpdates: true,
+      },
+      lastSyncTime: new Date().toLocaleTimeString(),
+    };
+  }
+
+  private static setSyncStatus(status: CloudSyncStatus): void {
+    this.syncStatus = status;
+    this.syncListeners.forEach((listener) => listener(status));
+  }
+
+  public static getSyncStatus(): CloudSyncStatus {
+    return this.syncStatus;
+  }
+
+  public static subscribeToSyncStatus(
+    listener: (status: CloudSyncStatus) => void,
+  ): () => void {
+    this.syncListeners.add(listener);
+    listener(this.syncStatus);
+    return () => this.syncListeners.delete(listener);
+  }
+
+  public static activateDemoMode(): AppState {
+    this.clearCloudUser();
+    const demoStored = this.readStoredState(DEMO_STORAGE_KEY);
+    const state = demoStored || this.createDefaultState();
+    this.inMemoryState = state;
+    this.writeLocalState(DEMO_STORAGE_KEY, state);
+    this.setSyncStatus("local");
+    return state;
+  }
+
+  public static clearCloudUser(): void {
+    this.saveGeneration++;
+    if (this.cloudSaveTimer) {
+      clearTimeout(this.cloudSaveTimer);
+      this.cloudSaveTimer = null;
+    }
+    this.cloudUserId = null;
+    this.inMemoryState = null;
+    this.setSyncStatus("local");
+  }
+
+  public static async flushCloudSync(): Promise<void> {
+    if (this.cloudSaveTimer) {
+      clearTimeout(this.cloudSaveTimer);
+      this.cloudSaveTimer = null;
+    }
+    if (!supabase || !this.cloudUserId) return;
+
+    const userId = this.cloudUserId;
+    const currentGen = ++this.saveGeneration;
+    const state = JSON.parse(JSON.stringify(this.loadState())) as AppState;
+    this.setSyncStatus("syncing");
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed: unknown = JSON.parse(stored);
-        const requiredArrays: (keyof AppState)[] = [
-          "crops",
-          "seasons",
-          "soilReports",
-          "seedBatches",
-          "inputProducts",
-          "inputPurchases",
-          "tasks",
-          "irrigations",
-          "cropObservations",
-          "expertRequests",
-          "machineryListings",
-          "labourBookings",
-          "harvestRecords",
-          "storageListings",
-          "transportListings",
-          "buyers",
-          "produceListings",
-          "buyerOffers",
-          "sales",
-          "payments",
-          "expenses",
-          "schemes",
-          "journeyEvents",
-        ];
-        if (
-          typeof parsed === "object" &&
-          parsed !== null &&
-          typeof (parsed as AppState).activeSeasonId === "string" &&
-          typeof (parsed as AppState).currentUser === "object" &&
-          typeof (parsed as AppState).farmer === "object" &&
-          typeof (parsed as AppState).farm === "object" &&
-          requiredArrays.every((key) =>
-            Array.isArray((parsed as AppState)[key]),
-          )
-        ) {
-          return parsed as AppState;
-        }
-        console.warn(
-          "Stored app state has an invalid shape; using demo defaults.",
+      await this.enqueueCloudSave(userId, state, currentGen);
+    } catch (error) {
+      if (this.cloudUserId !== userId || this.saveGeneration !== currentGen) return;
+      this.setSyncStatus("error");
+      throw error;
+    }
+    if (this.cloudUserId === userId && this.saveGeneration === currentGen) {
+      this.setSyncStatus("synced");
+    }
+  }
+
+  public static async activateCloudUser(user: User): Promise<void> {
+    if (!supabase) throw new Error("Supabase cloud sync is not configured.");
+
+    if (this.cloudSaveTimer) {
+      clearTimeout(this.cloudSaveTimer);
+      this.cloudSaveTimer = null;
+    }
+    const currentGen = ++this.saveGeneration;
+    this.cloudUserId = user.id;
+    this.inMemoryState = null;
+
+    // If offline, fall back directly to user's cached state
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const state = this.getSafeUserState(user, this.readUserState(user.id));
+      this.inMemoryState = state;
+      this.writeLocalState(this.getUserStorageKey(user.id), state);
+      this.setSyncStatus("offline");
+      return;
+    }
+
+    this.setSyncStatus("syncing");
+
+    const { data, error } = await supabase
+      .from("v2a_user_state")
+      .select("state")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (this.cloudUserId !== user.id || this.saveGeneration !== currentGen) {
+      return;
+    }
+
+    if (error) {
+      // Supabase or network error: attempt cached fallback
+      const cached = this.readUserState(user.id);
+      if (cached) {
+        const state = this.getSafeUserState(user, cached);
+        this.inMemoryState = state;
+        this.writeLocalState(this.getUserStorageKey(user.id), state);
+        this.setSyncStatus("error");
+        return;
+      }
+      this.setSyncStatus("error");
+      throw new Error(`Could not load cloud data: ${error.message}`);
+    }
+
+    let state: AppState;
+    let shouldSaveInitialState = false;
+    if (data && isAppState(data.state)) {
+      state = normalizeAppState(data.state);
+      if (this.isLegacyDemoSeed(state)) {
+        state = this.createNewUserInitialState(user);
+        shouldSaveInitialState = true;
+      }
+    } else {
+      // No record in cloud: use cached user state or clean initial state
+      const cachedState = this.readUserState(user.id);
+      state = this.getSafeUserState(user, cachedState);
+      shouldSaveInitialState = true;
+    }
+
+    if (shouldSaveInitialState) {
+      try {
+        await this.enqueueCloudSave(user.id, state, currentGen);
+      } catch (saveError) {
+        if (this.cloudUserId !== user.id || this.saveGeneration !== currentGen) return;
+        this.setSyncStatus("error");
+        throw new Error(
+          `Your account data could not be initialized in the cloud: ${
+            saveError instanceof Error ? saveError.message : "Please try again."
+          }`,
         );
       }
-    } catch (e) {
-      console.warn("Could not read state from localStorage", e);
     }
-    return this.createDefaultState();
+
+    if (this.cloudUserId !== user.id || this.saveGeneration !== currentGen) {
+      return;
+    }
+
+    state.currentUser = user;
+    if (user.role === "farmer") {
+      state.farmer = {
+        ...state.farmer,
+        userId: user.id,
+        fullName: user.name || state.farmer.fullName,
+        tamilFullName: user.tamilName || user.name || state.farmer.fullName,
+      };
+    }
+
+    this.inMemoryState = state;
+    this.writeLocalState(this.getUserStorageKey(user.id), state);
+    this.setSyncStatus("synced");
+  }
+
+  private static async enqueueCloudSave(
+    userId: string,
+    state: AppState,
+    currentGen: number,
+  ): Promise<void> {
+    const client = supabase;
+    if (!client) throw new Error("Supabase cloud sync is not configured.");
+
+    const saveTask = this.cloudSaveQueue.then(async () => {
+      if (this.cloudUserId !== userId || this.saveGeneration !== currentGen) return;
+
+      const { data, error: sessionError } = await client.auth.getSession();
+      if (sessionError) {
+        throw new Error(`Could not verify your cloud session: ${sessionError.message}`);
+      }
+      if (data.session?.user.id !== userId) {
+        throw new Error("Your cloud session changed before the data could be saved. Sign in again.");
+      }
+      if (this.cloudUserId !== userId || this.saveGeneration !== currentGen) return;
+
+      const { error } = await client.from("v2a_user_state").upsert(
+        {
+          user_id: userId,
+          state,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) throw new Error(`Could not finish cloud sync: ${error.message}`);
+    });
+
+    this.cloudSaveQueue = saveTask.then(
+      () => undefined,
+      () => undefined,
+    );
+    await saveTask;
+  }
+
+  private static readStoredState(storageKey: string): AppState | null {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (!stored) return null;
+      const parsed: unknown = JSON.parse(stored);
+      return isAppState(parsed) ? normalizeAppState(parsed) : null;
+    } catch (error) {
+      console.warn("Could not read cached app state", error);
+      return null;
+    }
+  }
+
+  private static writeLocalState(storageKey: string, state: AppState): void {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(state));
+    } catch (error) {
+      console.warn("Could not save local app state", error);
+    }
+  }
+
+  private static scheduleCloudSave(state: AppState): void {
+    const client = supabase;
+    if (!client || !this.cloudUserId) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      this.setSyncStatus("offline");
+      return;
+    }
+
+    const userId = this.cloudUserId;
+    const currentGen = ++this.saveGeneration;
+    const snapshot = JSON.parse(JSON.stringify(state)) as AppState;
+
+    if (this.cloudSaveTimer) clearTimeout(this.cloudSaveTimer);
+    this.setSyncStatus("syncing");
+
+    this.cloudSaveTimer = setTimeout(() => {
+      if (this.cloudUserId !== userId || this.saveGeneration !== currentGen) {
+        return;
+      }
+      this.cloudSaveTimer = null;
+      void this.enqueueCloudSave(userId, snapshot, currentGen)
+        .then(() => {
+          if (this.cloudUserId === userId && this.saveGeneration === currentGen) {
+            this.setSyncStatus("synced");
+          }
+        })
+        .catch((error: unknown) => {
+          if (this.cloudUserId !== userId || this.saveGeneration !== currentGen) return;
+          this.setSyncStatus("error");
+          console.error("Cloud sync failed", error);
+        });
+    }, 700);
+  }
+
+  public static markCloudOffline(): void {
+    if (this.cloudUserId) this.setSyncStatus("offline");
+  }
+
+  private static loadState(): AppState {
+    if (this.inMemoryState) {
+      return this.inMemoryState;
+    }
+
+    const key = this.getStorageKey();
+    const stored = this.readStoredState(key);
+    if (stored) {
+      this.inMemoryState = stored;
+      return stored;
+    }
+
+    if (this.cloudUserId) {
+      const clean = this.createNewUserInitialState({
+        id: this.cloudUserId,
+        name: "Farmer",
+        phone: "",
+        role: "farmer",
+      });
+      this.inMemoryState = clean;
+      this.writeLocalState(key, clean);
+      return clean;
+    }
+
+    const demo = this.createDefaultState();
+    this.inMemoryState = demo;
+    this.writeLocalState(DEMO_STORAGE_KEY, demo);
+    return demo;
   }
 
   private static saveState(state: AppState): void {
     try {
       state.lastSyncTime = new Date().toLocaleTimeString();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      this.inMemoryState = state;
+      this.writeLocalState(this.getStorageKey(), state);
+      this.scheduleCloudSave(state);
     } catch (e) {
       console.warn("Could not save state to localStorage", e);
     }
@@ -1537,19 +2127,6 @@ export class AppStore {
 
     this.saveState(s);
     return newObs;
-  }
-
-  public static addProduceListing(
-    listing: Omit<ProduceListing, "id">,
-  ): ProduceListing {
-    const s = this.loadState();
-    const newListing: ProduceListing = {
-      ...listing,
-      id: `LIST-${Date.now()}`,
-    };
-    s.produceListings.unshift(newListing);
-    this.saveState(s);
-    return newListing;
   }
 
   public static broadcastHarvest(
@@ -1825,6 +2402,9 @@ export class AppStore {
     seasonData: Omit<CropSeason, "id" | "seasonCode">,
   ): CropSeason {
     const s = this.loadState();
+    s.seasons = s.seasons.filter(
+      (season) => season.notes !== STARTER_SEASON_NOTE,
+    );
     const newId = `CR-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
     const newSeason: CropSeason = {
       ...seasonData,
@@ -1850,6 +2430,9 @@ export class AppStore {
   }
 
   public static resetToDemo(): AppState {
+    if (this.cloudUserId) {
+      throw new Error("Demo data cannot replace a signed-in account's data.");
+    }
     const state = this.createDefaultState();
     state.produceListings = [];
     state.buyerOffers = [];
@@ -1870,7 +2453,22 @@ export class AppStore {
   }
 
   // Pure Financial Calculators
-  public static calculateSeasonFinancials(seasonId: string) {
+  public static calculateSeasonFinancials(seasonId?: string) {
+    if (!seasonId) {
+      return {
+        totalExpenses: 0,
+        grossSales: 0,
+        totalDeductions: 0,
+        netProceedsInvoiced: 0,
+        receivedPayments: 0,
+        pendingPayments: 0,
+        projectedNetResult: 0,
+        realizedCashflow: 0,
+        expenseByCategory: {},
+        expenseCount: 0,
+        salesCount: 0,
+      };
+    }
     const s = this.loadState();
     const seasonExpenses = s.expenses.filter((e) => e.seasonId === seasonId);
     const seasonSales = s.sales.filter((sl) => sl.seasonId === seasonId);
@@ -1925,4 +2523,394 @@ export class AppStore {
       salesCount: seasonSales.length,
     };
   }
+
+  // --- Multi-Farm Management ---
+  public static addFarm(farm: Omit<Farm, "id"> & { id?: string }): Farm {
+    const s = this.loadState();
+    const newFarm: Farm = {
+      ...farm,
+      id: farm.id || `FARM-${Date.now()}`,
+      farmerId: farm.farmerId || s.farmer.id,
+      parcels: farm.parcels || [],
+      totalAreaAcres: farm.totalAreaAcres || 0,
+      activeSeasonsCount: farm.activeSeasonsCount || 0,
+    };
+    s.farms.push(newFarm);
+    if (!s.farm.id || s.farm.totalAreaAcres === 0) {
+      s.farm = newFarm;
+    }
+    this.saveState(s);
+    return newFarm;
+  }
+
+  public static updateFarm(farmId: string, updates: Partial<Farm>): Farm | null {
+    const s = this.loadState();
+    const idx = s.farms.findIndex((f) => f.id === farmId);
+    if (idx === -1) return null;
+    s.farms[idx] = { ...s.farms[idx], ...updates };
+    if (s.farm.id === farmId) {
+      s.farm = { ...s.farm, ...updates };
+    }
+    this.saveState(s);
+    return s.farms[idx];
+  }
+
+  public static deleteFarm(farmId: string): boolean {
+    const s = this.loadState();
+    s.farms = s.farms.filter((f) => f.id !== farmId);
+    if (s.farm.id === farmId) {
+      s.farm = s.farms[0] || {
+        id: `FARM-${Date.now()}`,
+        farmerId: s.farmer.id,
+        farmName: "My Farm",
+        village: "",
+        district: "",
+        totalAreaAcres: 0,
+        activeSeasonsCount: 0,
+        parcels: [],
+      };
+    }
+    this.saveState(s);
+    return true;
+  }
+
+  public static setActiveFarm(farmId: string): Farm | null {
+    const s = this.loadState();
+    const found = s.farms.find((f) => f.id === farmId);
+    if (!found) return null;
+    s.farm = found;
+    this.saveState(s);
+    return found;
+  }
+
+  public static addParcel(farmId: string, parcel: Omit<LandParcel, "id"> & { id?: string }): LandParcel {
+    const s = this.loadState();
+    const newParcel: LandParcel = {
+      ...parcel,
+      id: parcel.id || `PARCEL-${Date.now()}`,
+    };
+    const targetFarm = s.farms.find((f) => f.id === farmId);
+    if (targetFarm) {
+      targetFarm.parcels.push(newParcel);
+      targetFarm.totalAreaAcres = targetFarm.parcels.reduce((sum, p) => sum + p.acres, 0);
+    }
+    if (s.farm.id === farmId) {
+      s.farm.parcels = targetFarm ? targetFarm.parcels : [...s.farm.parcels, newParcel];
+      s.farm.totalAreaAcres = s.farm.parcels.reduce((sum, p) => sum + p.acres, 0);
+    }
+    s.farmer.totalLandAcres = s.farms.reduce((sum, f) => sum + f.totalAreaAcres, 0);
+    this.saveState(s);
+    return newParcel;
+  }
+
+  public static updateParcel(farmId: string, parcelId: string, updates: Partial<LandParcel>): LandParcel | null {
+    const s = this.loadState();
+    const targetFarm = s.farms.find((f) => f.id === farmId);
+    if (!targetFarm) return null;
+    const pIdx = targetFarm.parcels.findIndex((p) => p.id === parcelId);
+    if (pIdx === -1) return null;
+    targetFarm.parcels[pIdx] = { ...targetFarm.parcels[pIdx], ...updates };
+    targetFarm.totalAreaAcres = targetFarm.parcels.reduce((sum, p) => sum + p.acres, 0);
+    if (s.farm.id === farmId) {
+      s.farm.parcels = targetFarm.parcels;
+      s.farm.totalAreaAcres = targetFarm.totalAreaAcres;
+    }
+    s.farmer.totalLandAcres = s.farms.reduce((sum, f) => sum + f.totalAreaAcres, 0);
+    this.saveState(s);
+    return targetFarm.parcels[pIdx];
+  }
+
+  public static deleteParcel(farmId: string, parcelId: string): boolean {
+    const s = this.loadState();
+    const targetFarm = s.farms.find((f) => f.id === farmId);
+    if (!targetFarm) return false;
+    targetFarm.parcels = targetFarm.parcels.filter((p) => p.id !== parcelId);
+    targetFarm.totalAreaAcres = targetFarm.parcels.reduce((sum, p) => sum + p.acres, 0);
+    if (s.farm.id === farmId) {
+      s.farm.parcels = targetFarm.parcels;
+      s.farm.totalAreaAcres = targetFarm.totalAreaAcres;
+    }
+    s.farmer.totalLandAcres = s.farms.reduce((sum, f) => sum + f.totalAreaAcres, 0);
+    this.saveState(s);
+    return true;
+  }
+
+  // --- Harvest Record Management ---
+  public static addHarvestRecord(record: Omit<HarvestRecord, "id"> & { id?: string }): HarvestRecord {
+    const s = this.loadState();
+    const newRecord: HarvestRecord = {
+      ...record,
+      id: record.id || `HARV-${Date.now()}`,
+    };
+    s.harvestRecords.unshift(newRecord);
+
+    const season = s.seasons.find((item) => item.id === newRecord.seasonId);
+    if (season && season.stage !== "Sold & Settled") {
+      season.stage = "Harvested";
+    }
+
+    s.journeyEvents.push({
+      id: `EV-${Date.now()}`,
+      seasonId: newRecord.seasonId,
+      stage: "Harvesting",
+      title: `Harvest Recorded: ${newRecord.actualQuantityBags} Bags`,
+      tamilTitle: `அறுவடை பதிவு: ${newRecord.actualQuantityBags} மூட்டைகள்`,
+      date: newRecord.harvestDate,
+      description: `Harvest completed with ${newRecord.actualQuantityBags} bags (${newRecord.totalYieldKg} kg). Quality Grade: ${newRecord.grainQualityGrade}. Moisture: ${newRecord.moistureContentPct}%.`,
+      badge: `${newRecord.actualQuantityBags} Bags`,
+      verifiedOfficial: true,
+    });
+
+    this.saveState(s);
+    return newRecord;
+  }
+
+  public static updateHarvestRecord(harvestId: string, updates: Partial<HarvestRecord>): HarvestRecord | null {
+    const s = this.loadState();
+    const idx = s.harvestRecords.findIndex((h) => h.id === harvestId);
+    if (idx === -1) return null;
+    s.harvestRecords[idx] = { ...s.harvestRecords[idx], ...updates };
+    this.saveState(s);
+    return s.harvestRecords[idx];
+  }
+
+  public static deleteHarvestRecord(harvestId: string): boolean {
+    const s = this.loadState();
+    s.harvestRecords = s.harvestRecords.filter((h) => h.id !== harvestId);
+    this.saveState(s);
+    return true;
+  }
+
+  public static getHarvestSummary(seasonId: string) {
+    const s = this.loadState();
+    const records = s.harvestRecords.filter((h) => h.seasonId === seasonId);
+    const totalHarvestedBags = records.reduce((sum, h) => sum + h.actualQuantityBags, 0);
+    const totalYieldKg = records.reduce((sum, h) => sum + h.totalYieldKg, 0);
+    const totalDamagedBags = records.reduce((sum, h) => sum + (h.damagedQuantity || 0), 0);
+    const sales = s.sales.filter((sal) => sal.seasonId === seasonId);
+    const soldBags = sales.reduce((sum, sal) => sum + sal.bagsSold, 0);
+    const remainingBags = Math.max(0, totalHarvestedBags - soldBags);
+    const availableForSaleBags = Math.max(0, totalHarvestedBags - soldBags - totalDamagedBags);
+
+    return {
+      totalHarvestedBags,
+      totalYieldKg,
+      totalDamagedBags,
+      soldBags,
+      remainingBags,
+      availableForSaleBags,
+      harvestRecordsCount: records.length,
+    };
+  }
+
+  // --- Expense Edit & Delete ---
+  public static editExpense(expenseId: string, updates: Partial<Expense>): Expense | null {
+    const s = this.loadState();
+    const idx = s.expenses.findIndex((e) => e.id === expenseId);
+    if (idx === -1) return null;
+    s.expenses[idx] = { ...s.expenses[idx], ...updates };
+    this.saveState(s);
+    return s.expenses[idx];
+  }
+
+  public static deleteExpense(expenseId: string): boolean {
+    const s = this.loadState();
+    s.expenses = s.expenses.filter((e) => e.id !== expenseId);
+    this.saveState(s);
+    return true;
+  }
+
+  // --- Produce Listings & Enquiries ---
+  public static addProduceListing(listing: Omit<ProduceListing, "id"> & { id?: string }): ProduceListing {
+    const s = this.loadState();
+    const newListing: ProduceListing = {
+      ...listing,
+      id: listing.id || `PROD-LIST-${Date.now()}`,
+    };
+    s.produceListings.unshift(newListing);
+    this.saveState(s);
+    return newListing;
+  }
+
+  public static updateProduceListing(listingId: string, updates: Partial<ProduceListing>): ProduceListing | null {
+    const s = this.loadState();
+    const idx = s.produceListings.findIndex((p) => p.id === listingId);
+    if (idx === -1) return null;
+    s.produceListings[idx] = { ...s.produceListings[idx], ...updates };
+    this.saveState(s);
+    return s.produceListings[idx];
+  }
+
+  public static deleteProduceListing(listingId: string): boolean {
+    const s = this.loadState();
+    s.produceListings = s.produceListings.filter((p) => p.id !== listingId);
+    this.saveState(s);
+    return true;
+  }
+
+  public static addMarketplaceEnquiry(enquiry: Omit<MarketplaceEnquiry, "id" | "date" | "status">): MarketplaceEnquiry {
+    const s = this.loadState();
+    const newEnquiry: MarketplaceEnquiry = {
+      ...enquiry,
+      id: `ENQ-${Date.now()}`,
+      date: new Date().toISOString().split("T")[0],
+      status: "Pending",
+    };
+    s.enquiries.unshift(newEnquiry);
+    s.notifications.unshift({
+      id: `NOTIF-${Date.now()}`,
+      title: `New Buyer Enquiry: ${newEnquiry.cropName}`,
+      tamilTitle: `புதிய கொள்முதல் கோரிக்கை: ${newEnquiry.cropName}`,
+      message: `${newEnquiry.buyerName} requested ${newEnquiry.requestedQuantityBags} bags @ ₹${newEnquiry.offeredPricePerBag}/bag.`,
+      tamilMessage: `${newEnquiry.buyerName} ${newEnquiry.requestedQuantityBags} மூட்டைகளுக்கு ₹${newEnquiry.offeredPricePerBag} வீதம் கோரிக்கை விடுத்துள்ளார்.`,
+      type: "marketplace_enquiry",
+      read: false,
+      date: newEnquiry.date,
+      priority: "high",
+    });
+    this.saveState(s);
+    return newEnquiry;
+  }
+
+  public static updateEnquiryStatus(enquiryId: string, status: MarketplaceEnquiry["status"], replyMessage?: string): boolean {
+    const s = this.loadState();
+    const enquiry = s.enquiries.find((e) => e.id === enquiryId);
+    if (!enquiry) return false;
+    enquiry.status = status;
+    if (replyMessage) enquiry.replyMessage = replyMessage;
+    this.saveState(s);
+    return true;
+  }
+
+  // --- Input Products CRUD ---
+  public static addInputProduct(product: Omit<InputProduct, "id"> & { id?: string }): InputProduct {
+    const s = this.loadState();
+    const newProduct: InputProduct = {
+      ...product,
+      id: product.id || `INP-PROD-${Date.now()}`,
+    };
+    s.inputProducts.unshift(newProduct);
+    this.saveState(s);
+    return newProduct;
+  }
+
+  public static updateInputProduct(productId: string, updates: Partial<InputProduct>): InputProduct | null {
+    const s = this.loadState();
+    const idx = s.inputProducts.findIndex((p) => p.id === productId);
+    if (idx === -1) return null;
+    s.inputProducts[idx] = { ...s.inputProducts[idx], ...updates };
+    this.saveState(s);
+    return s.inputProducts[idx];
+  }
+
+  public static deleteInputProduct(productId: string): boolean {
+    const s = this.loadState();
+    s.inputProducts = s.inputProducts.filter((p) => p.id !== productId);
+    this.saveState(s);
+    return true;
+  }
+
+  // --- Notifications Management ---
+  public static addNotification(notif: Omit<AppNotification, "id" | "date" | "read">): AppNotification {
+    const s = this.loadState();
+    const newNotif: AppNotification = {
+      ...notif,
+      id: `NOTIF-${Date.now()}`,
+      date: new Date().toISOString().split("T")[0],
+      read: false,
+    };
+    s.notifications.unshift(newNotif);
+    this.saveState(s);
+    return newNotif;
+  }
+
+  public static markNotificationRead(id: string): void {
+    const s = this.loadState();
+    const notif = s.notifications.find((n) => n.id === id);
+    if (notif) notif.read = true;
+    this.saveState(s);
+  }
+
+  public static markAllNotificationsRead(): void {
+    const s = this.loadState();
+    s.notifications.forEach((n) => (n.read = true));
+    this.saveState(s);
+  }
+
+  public static deleteNotification(id: string): void {
+    const s = this.loadState();
+    s.notifications = s.notifications.filter((n) => n.id !== id);
+    this.saveState(s);
+  }
+
+  public static clearAllNotifications(): void {
+    const s = this.loadState();
+    s.notifications = [];
+    this.saveState(s);
+  }
+
+  public static updateNotificationPreferences(prefs: Partial<NotificationPreferences>): void {
+    const s = this.loadState();
+    s.notificationPreferences = { ...s.notificationPreferences, ...prefs };
+    this.saveState(s);
+  }
+
+  // --- Seed Passport & Suspicious Reports ---
+  public static reportSuspiciousSeed(report: Omit<SuspiciousSeedReport, "id" | "date" | "status">): SuspiciousSeedReport {
+    const s = this.loadState();
+    const newReport: SuspiciousSeedReport = {
+      ...report,
+      id: `REP-SEED-${Date.now()}`,
+      date: new Date().toISOString().split("T")[0],
+      status: "Pending Investigation",
+    };
+    s.suspiciousReports.unshift(newReport);
+    s.notifications.unshift({
+      id: `NOTIF-SEED-${Date.now()}`,
+      title: "Seed Discrepancy Logged",
+      tamilTitle: "விதை குறைபாடு புகார் பதிவானது",
+      message: `Batch ${report.batchNumber} reported for review by Department of Seed Inspection.`,
+      tamilMessage: `தொகுதி எண் ${report.batchNumber} ஆய்வுக்கு அனுப்பப்பட்டுள்ளது.`,
+      type: "account",
+      read: false,
+      date: newReport.date,
+      priority: "high",
+    });
+    this.saveState(s);
+    return newReport;
+  }
+
+  public static updateSuspiciousReportStatus(id: string, status: SuspiciousSeedReport["status"]): boolean {
+    const s = this.loadState();
+    const rep = s.suspiciousReports.find((r) => r.id === id);
+    if (!rep) return false;
+    rep.status = status;
+    this.saveState(s);
+    return true;
+  }
+
+  // --- Unit Conversions ---
+  public static acresToHectares(acres: number): number {
+    return Math.round(acres * 0.404686 * 1000) / 1000;
+  }
+
+  public static hectaresToAcres(hectares: number): number {
+    return Math.round(hectares * 2.47105 * 1000) / 1000;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    if (
+      AppStore.getSyncStatus() === "offline" ||
+      AppStore.getSyncStatus() === "error"
+    ) {
+      void AppStore.flushCloudSync().catch((e) => {
+        console.warn("Auto-sync after reconnect failed:", e);
+      });
+    }
+  });
+  window.addEventListener("offline", () => {
+    AppStore.markCloudOffline();
+  });
 }

@@ -1,0 +1,53 @@
+V2A CLOUD SYNC SETUP (SUPABASE)
+
+The app has been prepared to sync a signed-in user's app state through Supabase. Cloud sync stays off until you create a Supabase project, run the SQL below, and add the project URL/key. Without those settings, the app continues to run in local demo mode.
+
+IMPORTANT LIMITS
+- This starter stores one JSON state document per signed-in account. It is intended for this prototype, not a production system for sensitive financial, identity, or farm records.
+- Each account's data is protected by Supabase Row Level Security (RLS) policies in supabase/schema.sql.
+- Existing anonymous browser data is NOT automatically copied to a new cloud account. The old data remains in that browser's local storage. A new account starts with its own empty farm, parcel, task, and transaction records plus a clearly labeled planning template and local sample catalogs; it does not receive the separate VIJAY demo farmer or transaction data. Sample catalog entries may not reflect actual availability or prices.
+- Do not use a Supabase service-role/secret key in this browser app. Use only the project URL and the publishable/anon key, with the SQL RLS policies enabled.
+
+1. CREATE A SUPABASE PROJECT
+- Sign in or create an account at https://supabase.com/.
+- Create a new project and save its database password somewhere secure.
+- Wait until the project is ready.
+
+2. CREATE THE PRIVATE USER-STATE TABLE
+- Open the Supabase project and choose SQL Editor > New query.
+- Open this project's supabase/schema.sql file, copy all its SQL into the query, and click Run.
+- The table stores one app-state record per Supabase user. RLS ensures an authenticated user can read/write only their own row.
+
+3. ENABLE EMAIL SIGN-IN AND SET REDIRECT URLS
+- In Supabase, open Authentication > Providers and ensure Email is enabled.
+- In Authentication > URL Configuration, set the Site URL to:
+  https://vithai-to-aruvadai.vercel.app
+- Add these Redirect URLs:
+  https://vithai-to-aruvadai.vercel.app/**
+  http://localhost:5173/**
+- Keep email confirmation enabled for real accounts. Supabase may send a confirmation email after sign-up.
+- For password reset, the email link returns to the hash-routed reset form. Keep the production origin and local development URL on the allowed Redirect URLs list.
+
+4. SET UP LOCAL DEVELOPMENT
+- In the project folder, copy .env.example to .env.local.
+- Open .env.local and replace the placeholders with the Supabase Project URL and the publishable/anon key from Project Settings > API.
+- Do not share .env.local or commit it to GitHub; it is ignored by .gitignore.
+- Install packages if needed with: npm.cmd install
+- Run the app with: npm.cmd run dev
+- Open the local URL printed in the terminal. To use personal email/password accounts, first replace both Supabase placeholders in .env.local with real project values, then restart the dev server. The app will show the cloud sign-in screen; choose "Create an account" to register or open `http://localhost:5173/#/signup`.
+- If Supabase is not configured, the app runs in the local-only VIJAY demo mode and does not offer personal account registration. Personal email/password authentication requires valid Supabase settings.
+- The separate "Continue as demo user (VIJAY)" option never signs into Supabase and uses only this browser's demo data.
+
+5. CONNECT THE DEPLOYED VERCEL APP
+- Open the V2A project in Vercel > Settings > Environment Variables.
+- Add VITE_SUPABASE_URL with the Supabase Project URL.
+- Add VITE_SUPABASE_ANON_KEY with the publishable/anon key.
+- Apply them to Production (and Preview if desired), save, then redeploy the latest deployment.
+- Open the live app, create an account/sign in, and look for “Cloud Synced” only after the initial account data and a change have been saved successfully. If the app reports an offline or sync error, reconnect and use Retry in the top banner.
+
+6. TEST SYNC BETWEEN DEVICES
+- Sign in to the same account on two browsers/devices.
+- Make a small test change on one, wait for “Cloud synced,” then refresh the other.
+- Avoid editing the same records on both devices at the same time: this prototype uses last-write-wins for the whole state document rather than merging simultaneous changes.
+
+If cloud sync fails, check that the SQL ran successfully, both Vercel environment variables are exact, the current deployment was rebuilt after setting them, and the user is signed in. The app's old local-only data is not migrated automatically; make a separate backup before attempting any manual migration.

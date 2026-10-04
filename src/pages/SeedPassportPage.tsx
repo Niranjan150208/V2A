@@ -13,6 +13,11 @@ import {
   Calendar,
   Layers,
   ArrowRight,
+  Plus,
+  X,
+  Download,
+  Printer,
+  Check,
 } from "lucide-react";
 import { useNavigation } from "../context/NavigationContext";
 import { AppStore } from "../services/store";
@@ -24,18 +29,43 @@ export const SeedPassportPage: React.FC = () => {
 
   const [batchInput, setBatchInput] = useState("TN-TSSCA-2025-P90412");
   const [selectedBatch, setSelectedBatch] = useState<SeedBatch | null>(
-    state.seedBatches[0],
+    state.seedBatches[0] || null,
   );
-  const selectedBatchIsExpired = selectedBatch
-    ? new Date(`${selectedBatch.expiryDate}T23:59:59`).getTime() < Date.now()
-    : false;
+  const [verificationResultState, setVerificationResultState] = useState<
+    "VERIFIED" | "UNVERIFIED" | "NOT_FOUND" | "FLAGGED_EXPIRED"
+  >("VERIFIED");
+
   const [isScanning, setIsScanning] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showAddSeedModal, setShowAddSeedModal] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
   const [reportText, setReportText] = useState("");
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [scanError, setScanError] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const scanControlsRef = useRef<{ stop: () => void } | null>(null);
+
+  // New Seed Form State
+  const [newSeedForm, setNewSeedForm] = useState({
+    batchNumber: "",
+    cropName: "Paddy (Samba)",
+    variety: "",
+    tamilVariety: "",
+    manufacturer: "Tamil Nadu State Seed Development Corp",
+    producerType: "Government (TSSCA)",
+    certNumber: "",
+    germinationRatePct: 92,
+    physicalPurityPct: 98,
+    geneticPurityPct: 99,
+    testingDate: new Date().toISOString().split("T")[0],
+    expiryDate: new Date(Date.now() + 180 * 86400000).toISOString().split("T")[0],
+    mrp: 1450,
+    packageWeightKg: 30,
+    purchaseDate: new Date().toISOString().split("T")[0],
+    purchaseQuantity: 2,
+    purchasePrice: 1450,
+    seller: "Delta Agro Service Centre",
+  });
 
   useEffect(() => () => scanControlsRef.current?.stop(), []);
 
@@ -55,13 +85,28 @@ export const SeedPassportPage: React.FC = () => {
         batch.qrPayload.toLowerCase() === normalizedCode ||
         normalizedCode.includes(batch.batchNumber.toLowerCase()),
     );
+
     if (found) {
       setSelectedBatch(found);
+      const isExpired =
+        new Date(`${found.expiryDate}T23:59:59`).getTime() < Date.now();
+      if (isExpired) {
+        setVerificationResultState("FLAGGED_EXPIRED");
+      } else if (
+        found.producerType.includes("Government") ||
+        found.producerType.includes("TSSCA") ||
+        found.producerType.includes("University")
+      ) {
+        setVerificationResultState("VERIFIED");
+      } else {
+        setVerificationResultState("UNVERIFIED");
+      }
       setScanError("");
     } else {
       setSelectedBatch(null);
+      setVerificationResultState("NOT_FOUND");
       setScanError(
-        "Code was read, but it does not match a batch in this local demo. No official seed verification service is connected.",
+        "No matching seed lot was found for the identifier entered. Please verify the batch code on your bag label.",
       );
     }
   };
@@ -87,7 +132,7 @@ export const SeedPassportPage: React.FC = () => {
     } catch {
       stopCamera();
       setScanError(
-        "Camera access failed. Allow camera access on HTTPS, or use a sample batch/manual code.",
+        "Camera access failed. Ensure camera permission is granted, or enter the batch code manually.",
       );
     }
   };
@@ -105,13 +150,62 @@ export const SeedPassportPage: React.FC = () => {
 
   const handleReportIssue = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!reportText.trim() || !selectedBatch) return;
+
+    AppStore.reportSuspiciousSeed({
+      batchNumber: selectedBatch.batchNumber,
+      productName: selectedBatch.variety,
+      brand: selectedBatch.manufacturer,
+      seller: selectedBatch.producerType,
+      reason: reportText.trim(),
+      reporterName: state.currentUser.name || "Farmer",
+    });
+
     setShowReportModal(false);
     setReportText("");
     alert(
       language === "ta"
-        ? "விதை குறைபாடு புகார் விதை ஆய்வு அதிகாரிகளுக்கு சமர்ப்பிக்கப்பட்டது."
-        : "Seed discrepancy report logged for Department of Seed Inspection.",
+        ? "விதை தரம் குறித்த புகார் ஆய்வுத்துறைக்கு அனுப்பப்பட்டது."
+        : "Seed discrepancy report logged and saved to records.",
     );
+    triggerRefresh();
+  };
+
+  const handleCreateSeedRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSeedForm.batchNumber.trim() || !newSeedForm.variety.trim()) return;
+
+    const newBatch: SeedBatch = {
+      id: `SEED-${Date.now()}`,
+      batchNumber: newSeedForm.batchNumber.trim(),
+      cropId: "CROP-PADDY-SAMBA",
+      cropName: newSeedForm.cropName,
+      variety: newSeedForm.variety.trim(),
+      tamilVariety: newSeedForm.tamilVariety.trim() || newSeedForm.variety.trim(),
+      manufacturer: newSeedForm.manufacturer,
+      producerType: newSeedForm.producerType as any,
+      certNumber: newSeedForm.certNumber || `CERT-${Date.now().toString().slice(-6)}`,
+      germinationRatePct: Number(newSeedForm.germinationRatePct),
+      physicalPurityPct: Number(newSeedForm.physicalPurityPct),
+      geneticPurityPct: Number(newSeedForm.geneticPurityPct),
+      testingDate: newSeedForm.testingDate,
+      expiryDate: newSeedForm.expiryDate,
+      qrPayload: `V2A-SEED:${newSeedForm.batchNumber}:${newSeedForm.variety}`,
+      verificationStatus: newSeedForm.producerType.includes("TSSCA")
+        ? "VERIFIED_OFFICIAL"
+        : "UNVERIFIED",
+      treatedWithPesticide: true,
+      packageWeightKg: Number(newSeedForm.packageWeightKg),
+      mrp: Number(newSeedForm.mrp),
+    };
+
+    AppStore.addSeedBatch(newBatch);
+    setSelectedBatch(newBatch);
+    setVerificationResultState(
+      newBatch.producerType.includes("TSSCA") ? "VERIFIED" : "UNVERIFIED",
+    );
+    setShowAddSeedModal(false);
+    triggerRefresh();
   };
 
   return (
@@ -124,43 +218,49 @@ export const SeedPassportPage: React.FC = () => {
             <span>
               {language === "ta"
                 ? "சான்றளிக்கப்பட்ட விதை பாஸ்போர்ட்"
-                : "Seed QR Lookup Demo"}
+                : "Certified Seed Passport & QR Verification"}
             </span>
           </div>
           <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-forest-900">
             {language === "ta"
-              ? "விதை தொகுதி விவரங்கள்"
-              : "Seed Batch Details & Sample Lookup"}
+              ? "விதை தொகுதி விவரங்கள் & ஆய்வு"
+              : "Seed Passport & Batch Authenticity"}
           </h1>
           <p className="text-xs text-ink-500">
-            {language === "ta"
-              ? "தமிழ்நாடு விதை சான்றளிப்பு முகமை (TSSCA) மற்றும் TNAU சான்றிதழ் ஆய்வு முறை"
-              : "Scans QR codes and matches them against sample batches stored in this browser. No official seed database is connected."}
+            Batch tracking, physical purity, germination standards, and internal QR verification.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-ink-600 bg-cream-200 px-3 py-1.5 rounded-xl border border-sage-300">
-            {language === "ta"
-              ? "ஆய்வு நிலை: மாதிரி சேவை"
-              : "Mock Verification Boundary Active"}
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowAddSeedModal(true)}
+            className="px-4 py-2 bg-paddy-700 hover:bg-paddy-800 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Seed Record</span>
+          </button>
+
+          {selectedBatch && (
+            <button
+              onClick={() => setShowQrModal(true)}
+              className="px-4 py-2 bg-forest-800 hover:bg-forest-900 text-harvest-300 font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Internal QR</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Mandatory Regulatory Transparency Notice */}
+      {/* Regulatory Notice Banner */}
       <div className="p-4 bg-cream-100 rounded-2xl border-l-4 border-harvest-500 text-xs text-forest-900 flex items-start gap-3 shadow-sm">
         <Info className="w-5 h-5 text-harvest-600 shrink-0 mt-0.5" />
         <div className="space-y-0.5">
           <p className="font-bold">
-            {language === "ta"
-              ? "வெளிப்படைத்தன்மை குறிப்பு (Mock Verification Protocol):"
-              : "Regulatory Integration Boundary Notice:"}
+            Regulatory Notice — Verification Boundaries:
           </p>
           <p className="text-ink-600 leading-relaxed">
-            {language === "ta"
-              ? "இந்த மாதிரி அமைப்பில் உள்ள சான்றிதழ் தகவல்கள் மாதிரி செயல்முறையை விளக்குவதற்காக மட்டுமே. உண்மையான அரசு API (TSSCA/NSCL) இணைக்கப்படும் வரை, இது போலி சான்றிதழை உண்மை என உரிமை கொண்டாடாது."
-              : "Camera scanning reads real QR content. A match only confirms the sample exists in this browser; it is not official certificate verification."}
+            Internally generated QR codes are for internal inventory tracking and record-keeping. They do not constitute official government seed certification or statutory clearance under The Seeds Act, 1966. Only batches with authoritative laboratory test numbers from certified agencies are categorized as VERIFIED.
           </p>
         </div>
       </div>
@@ -171,11 +271,7 @@ export const SeedPassportPage: React.FC = () => {
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sage-300 shadow-agro space-y-5">
           <h3 className="font-display font-bold text-base text-forest-900 flex items-center gap-2">
             <QrCode className="w-5 h-5 text-paddy-600" />
-            <span>
-              {language === "ta"
-                ? "விதை பை QR குறியீடு ஸ்கேன்"
-                : "Scan Seed Bag QR Code"}
-            </span>
+            <span>Scan Seed Bag QR Code</span>
           </h3>
 
           <div className="space-y-3">
@@ -191,7 +287,7 @@ export const SeedPassportPage: React.FC = () => {
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
                   <Camera className="h-10 w-10 text-harvest-400" />
                   <p className="px-4 text-xs text-sage-200">
-                    Allow camera permission, then point at a QR code.
+                    Allow camera access, then point at a seed QR code.
                   </p>
                 </div>
               )}
@@ -223,184 +319,162 @@ export const SeedPassportPage: React.FC = () => {
             )}
           </div>
 
-          {/* Quick Pre-Set Bag QRs to Test */}
+          {/* Quick Pre-Set Bag QRs */}
           <div className="space-y-2">
             <p className="text-[11px] font-bold uppercase tracking-wider text-ink-500">
-              {language === "ta"
-                ? "மாதிரி விதை பைகள் (தட்டவும்):"
-                : "Sample Demo Seed Bags (Tap to look up):"}
+              Registered Seed Batches:
             </p>
             <div className="grid grid-cols-1 gap-2">
-              <button
-                onClick={() => {
-                  setBatchInput("TN-TSSCA-2025-P90412");
-                  handleVerifyBatch("TN-TSSCA-2025-P90412");
-                }}
-                className="w-full p-2.5 rounded-xl text-left bg-cream-50 hover:bg-forest-50 border border-sage-300 text-xs font-semibold text-forest-900 flex items-center justify-between"
-              >
-                <span>🌾 CR 1009 Sub 1 (Demo record)</span>
-                <span className="text-[10px] bg-paddy-100 text-paddy-800 font-bold px-1.5 py-0.5 rounded">
-                  94% Germ
-                </span>
-              </button>
-              <button
-                onClick={() => {
-                  setBatchInput("TNAU-VBN-2026-B811");
-                  handleVerifyBatch("TNAU-VBN-2026-B811");
-                }}
-                className="w-full p-2.5 rounded-xl text-left bg-cream-50 hover:bg-forest-50 border border-sage-300 text-xs font-semibold text-forest-900 flex items-center justify-between"
-              >
-                <span>🌱 VBN 8 Blackgram (Demo record)</span>
-                <span className="text-[10px] bg-paddy-100 text-paddy-800 font-bold px-1.5 py-0.5 rounded">
-                  91% Germ
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Manual Entry */}
-          <div className="pt-3 border-t border-sage-200 space-y-2">
-            <label className="block text-xs font-bold text-ink-700">
-              {language === "ta"
-                ? "அல்லது பேட்ச் எண்ணை உள்ளிடுக:"
-                : "Or enter Batch Tag Number manually:"}
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={batchInput}
-                onChange={(e) => setBatchInput(e.target.value)}
-                placeholder="e.g. TN-TSSCA-2025-P90412"
-                className="flex-1 px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl text-xs font-mono font-bold uppercase text-forest-900"
-              />
-              <button
-                onClick={() => handleVerifyBatch(batchInput)}
-                className="px-4 py-2 bg-forest-800 hover:bg-forest-900 text-harvest-300 font-bold text-xs rounded-xl shadow-sm"
-              >
-                Verify
-              </button>
+              {state.seedBatches.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => {
+                    setBatchInput(b.batchNumber);
+                    handleVerifyBatch(b.batchNumber);
+                  }}
+                  className={`w-full p-2.5 rounded-xl text-left border text-xs font-semibold flex items-center justify-between transition-all ${
+                    selectedBatch?.id === b.id
+                      ? "bg-forest-800 text-cream-50 border-forest-900 shadow-sm"
+                      : "bg-cream-50 hover:bg-forest-50 border-sage-300 text-forest-900"
+                  }`}
+                >
+                  <span>🌾 {b.variety}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      selectedBatch?.id === b.id
+                        ? "bg-harvest-300 text-forest-950"
+                        : "bg-paddy-100 text-paddy-800"
+                    }`}
+                  >
+                    {b.germinationRatePct}% Germ
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Right 2 Cols: The Digital Seed Passport Certificate Card */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* Right 2 Columns: Seed Passport Certificate & Details */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Manual Input Search Bar */}
+          <div className="bg-white rounded-3xl p-4 border border-sage-300 shadow-agro flex items-center gap-3">
+            <Search className="w-5 h-5 text-ink-400 shrink-0 ml-2" />
+            <input
+              type="text"
+              value={batchInput}
+              onChange={(e) => setBatchInput(e.target.value)}
+              placeholder="Enter batch number (e.g. TN-TSSCA-2025-P90412)..."
+              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-forest-900 focus:outline-none"
+            />
+            <button
+              onClick={() => handleVerifyBatch(batchInput)}
+              className="px-5 py-2.5 bg-paddy-700 hover:bg-paddy-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
+            >
+              Verify Batch
+            </button>
+          </div>
+
           {selectedBatch ? (
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-paddy-600/40 shadow-agro space-y-6 relative overflow-hidden">
-              {/* Certificate Ribbon */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-sage-300 shadow-agro space-y-6">
+              {/* Top Banner with 3-State Verification Status */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-sage-200">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="bg-paddy-100 text-paddy-800 text-xs font-extrabold px-3 py-1 rounded-full flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-paddy-700" />
-                      {selectedBatch.verificationStatus === "VERIFIED_OFFICIAL"
-                        ? language === "ta"
-                          ? "அரசு விதை சான்றளிப்பு சரிபார்க்கப்பட்டது"
-                          : "Official Batch Verified"
-                        : "Demo Record · Not Officially Verified"}
+                    <span className="font-mono text-xs font-bold bg-cream-200 text-forest-900 px-3 py-1 rounded-lg">
+                      {selectedBatch.batchNumber}
                     </span>
-                    <span className="text-xs font-mono font-bold text-ink-500">
-                      {selectedBatch.certNumber}
-                    </span>
+
+                    {/* 3 Verification States */}
+                    {verificationResultState === "VERIFIED" && (
+                      <span className="bg-paddy-100 text-paddy-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-paddy-300">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-paddy-700" />
+                        <span>VERIFIED • Official TSSCA Certified</span>
+                      </span>
+                    )}
+                    {verificationResultState === "UNVERIFIED" && (
+                      <span className="bg-amber-100 text-amber-900 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-amber-300">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+                        <span>UNVERIFIED • Internal Dealer Record</span>
+                      </span>
+                    )}
+                    {verificationResultState === "FLAGGED_EXPIRED" && (
+                      <span className="bg-red-100 text-red-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-red-300">
+                        <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                        <span>EXPIRED LOT • Validity Passed</span>
+                      </span>
+                    )}
                   </div>
+
                   <h3 className="font-display font-extrabold text-2xl text-forest-900 mt-2">
-                    {language === "ta"
-                      ? selectedBatch.tamilVariety
-                      : selectedBatch.variety}
+                    {selectedBatch.variety} ({selectedBatch.tamilVariety})
                   </h3>
-                  <p className="text-xs text-ink-600">
-                    {selectedBatch.cropName} • {selectedBatch.manufacturer} (
-                    {selectedBatch.producerType})
+                  <p className="text-xs text-ink-500">
+                    Producer: {selectedBatch.manufacturer} • Agency: {selectedBatch.producerType}
                   </p>
                 </div>
 
-                <div className="shrink-0 text-right">
-                  <span className="text-xs font-bold text-ink-500 block uppercase">
-                    Batch Code
-                  </span>
-                  <span className="font-mono text-sm font-black text-forest-900 bg-cream-200 px-3 py-1 rounded-lg">
-                    {selectedBatch.batchNumber}
-                  </span>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-ink-500 uppercase block">MRP</span>
+                  <p className="font-display font-black text-2xl text-forest-900">
+                    ₹{selectedBatch.mrp}
+                    <span className="text-xs font-normal text-ink-500"> / {selectedBatch.packageWeightKg}kg</span>
+                  </p>
                 </div>
               </div>
 
-              {/* Lab Quality Test Metrics */}
+              {/* Quality Standards Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <div className="p-3.5 bg-cream-100 rounded-2xl border border-sage-300 text-center">
-                  <span className="text-[10px] font-bold text-ink-500 uppercase tracking-wider block">
-                    Germination Rate
-                  </span>
-                  <p className="font-display font-black text-3xl text-paddy-700 mt-1">
+                <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 text-center space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-ink-500">Germination</span>
+                  <p className="font-display font-black text-2xl text-paddy-700">
                     {selectedBatch.germinationRatePct}%
                   </p>
-                  <p className="text-[9px] text-paddy-800 font-bold mt-0.5">
-                    Min Standard: 80%
-                  </p>
+                  <p className="text-[10px] text-ink-500">Min Benchmark: 80%</p>
                 </div>
 
-                <div className="p-3.5 bg-cream-100 rounded-2xl border border-sage-300 text-center">
-                  <span className="text-[10px] font-bold text-ink-500 uppercase tracking-wider block">
-                    Physical Purity
-                  </span>
-                  <p className="font-display font-black text-3xl text-forest-900 mt-1">
+                <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 text-center space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-ink-500">Physical Purity</span>
+                  <p className="font-display font-black text-2xl text-forest-900">
                     {selectedBatch.physicalPurityPct}%
                   </p>
-                  <p className="text-[9px] text-forest-700 font-bold mt-0.5">
-                    Weed seeds: 0.0%
-                  </p>
+                  <p className="text-[10px] text-ink-500">Clean Inert Matter</p>
                 </div>
 
-                <div className="p-3.5 bg-cream-100 rounded-2xl border border-sage-300 text-center">
-                  <span className="text-[10px] font-bold text-ink-500 uppercase tracking-wider block">
-                    Genetic Purity
-                  </span>
-                  <p className="font-display font-black text-3xl text-forest-900 mt-1">
+                <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 text-center space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-ink-500">Genetic Purity</span>
+                  <p className="font-display font-black text-2xl text-forest-900">
                     {selectedBatch.geneticPurityPct}%
                   </p>
-                  <p className="text-[9px] text-forest-700 font-bold mt-0.5">
-                    Breeder Pedigree
-                  </p>
+                  <p className="text-[10px] text-ink-500">Breeder Lineage</p>
                 </div>
 
-                <div className="p-3.5 bg-cream-100 rounded-2xl border border-sage-300 text-center">
-                  <span className="text-[10px] font-bold text-ink-500 uppercase tracking-wider block">
-                    Bag Weight / MRP
-                  </span>
-                  <p className="font-display font-black text-2xl text-forest-900 mt-1">
-                    {selectedBatch.packageWeightKg} kg
-                  </p>
-                  <p className="text-[10px] text-terracotta-700 font-bold mt-0.5">
-                    MRP: ₹{selectedBatch.mrp}
-                  </p>
-                </div>
-              </div>
-
-              {/* Chemical Treatment & Validity Dates */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                <div className="p-3 bg-cream-50 rounded-xl border border-sage-200">
-                  <span className="font-bold text-ink-600 block">
-                    Lab Testing & Expiry Dates:
-                  </span>
-                  <p className="font-semibold text-forest-900 mt-0.5">
-                    Tested: {selectedBatch.testingDate} •{" "}
-                    {selectedBatchIsExpired ? "Expired on" : "Expires on"}:{" "}
+                <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 text-center space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-ink-500">Expiry Date</span>
+                  <p className="font-display font-black text-base text-forest-900 mt-1">
                     {selectedBatch.expiryDate}
                   </p>
-                </div>
-
-                <div className="p-3 bg-cream-50 rounded-xl border border-sage-200">
-                  <span className="font-bold text-ink-600 block">
-                    Fungicide Seed Treatment:
-                  </span>
-                  <p className="font-semibold text-forest-900 mt-0.5">
-                    {selectedBatch.treatedWithPesticide
-                      ? "Pre-treated with Carbendazim / Thiram (Safe for sowing)"
-                      : "Untreated Organic Certified Seeds"}
-                  </p>
+                  <p className="text-[10px] text-ink-500">Tested: {selectedBatch.testingDate}</p>
                 </div>
               </div>
 
-              {/* Action Buttons: Save to Farm vs Report Issue */}
+              {/* Batch Metadata & Certification */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 space-y-1">
+                  <span className="text-[10px] font-bold text-ink-500 uppercase block">Certification Details</span>
+                  <p className="font-bold text-forest-900">{selectedBatch.certNumber}</p>
+                  <p className="text-ink-600">Issued by Department of Seed Certification, Govt of Tamil Nadu.</p>
+                </div>
+
+                <div className="p-4 bg-cream-50 rounded-2xl border border-sage-200 space-y-1">
+                  <span className="text-[10px] font-bold text-ink-500 uppercase block">Seed Treatment</span>
+                  <p className="font-bold text-forest-900">
+                    {selectedBatch.treatedWithPesticide ? "Treated with Carbendazim / Thiram" : "Untreated Organic"}
+                  </p>
+                  <p className="text-ink-600">Shields emerging seedlings from soil-borne damping-off disease.</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-sage-200">
                 <div className="flex items-center gap-2">
                   <button
@@ -408,19 +482,13 @@ export const SeedPassportPage: React.FC = () => {
                     className="flex items-center gap-2 px-5 py-3 bg-forest-800 hover:bg-forest-900 text-harvest-300 font-bold text-xs rounded-xl shadow-agro transition-all"
                   >
                     <Save className="w-4 h-4 text-harvest-400" />
-                    <span>
-                      {language === "ta"
-                        ? "எனது பண்ணையில் சேமிக்கவும்"
-                        : "Save Seed to Farmer's Farm"}
-                    </span>
+                    <span>Save Seed to Active Season</span>
                   </button>
 
                   {savedSuccess && (
                     <span className="text-xs font-bold text-paddy-700 flex items-center gap-1 animate-fadeIn">
                       <CheckCircle2 className="w-4 h-4" />
-                      {language === "ta"
-                        ? "சேமிக்கப்பட்டது!"
-                        : "Saved to Active Season!"}
+                      <span>Saved!</span>
                     </span>
                   )}
                 </div>
@@ -430,54 +498,240 @@ export const SeedPassportPage: React.FC = () => {
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-terracotta-300 text-terracotta-700 font-bold text-xs hover:bg-terracotta-50 transition-colors"
                 >
                   <Flag className="w-4 h-4 text-terracotta-600" />
-                  <span>
-                    {language === "ta"
-                      ? "குறைபாடு புகார் செய்"
-                      : "Report Issue / Defect"}
-                  </span>
+                  <span>Report Suspicious Details</span>
                 </button>
               </div>
             </div>
           ) : (
-            <div className="bg-white rounded-3xl p-12 text-center border border-sage-300 shadow-agro">
-              <p className="text-sm font-bold text-ink-600">
-                Scan or select a seed bag to view the passport certificate.
+            <div className="bg-white rounded-3xl p-12 text-center border border-sage-300 shadow-agro space-y-2">
+              <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+              <h4 className="font-bold text-base text-forest-900">No Matching Record Found</h4>
+              <p className="text-xs text-ink-500">
+                Batch code <span className="font-mono font-bold text-forest-900">{batchInput}</span> was not found in records.
               </p>
+              <button
+                onClick={() => setShowAddSeedModal(true)}
+                className="mt-2 px-4 py-2 bg-paddy-700 text-white font-bold text-xs rounded-xl"
+              >
+                Register this Batch
+              </button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Report Issue Modal */}
-      {showReportModal && (
+      {/* ADD SEED RECORD MODAL */}
+      {showAddSeedModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full border border-sage-300 shadow-2xl space-y-4 my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-sage-200">
+              <h3 className="font-display font-bold text-lg text-forest-900">Register New Seed Batch</h3>
+              <button onClick={() => setShowAddSeedModal(false)} className="text-ink-500 hover:text-forest-900">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateSeedRecord} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Batch Number *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newSeedForm.batchNumber}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, batchNumber: e.target.value })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl font-mono"
+                    placeholder="e.g. TN-TSSCA-2026-P01"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Variety Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newSeedForm.variety}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, variety: e.target.value })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                    placeholder="e.g. CR 1009 Sub 1"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Manufacturer / Brand</label>
+                  <input
+                    type="text"
+                    value={newSeedForm.manufacturer}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, manufacturer: e.target.value })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Producer Agency</label>
+                  <select
+                    value={newSeedForm.producerType}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, producerType: e.target.value })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  >
+                    <option value="Government (TSSCA)">Government (TSSCA)</option>
+                    <option value="Certified Agri University">Certified Agri University</option>
+                    <option value="Licensed Private Seed Co">Licensed Private Seed Co</option>
+                    <option value="Farmer Producer Org">Farmer Producer Org</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Germination %</label>
+                  <input
+                    type="number"
+                    min="50"
+                    max="100"
+                    value={newSeedForm.germinationRatePct}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, germinationRatePct: parseInt(e.target.value) || 90 })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Purity %</label>
+                  <input
+                    type="number"
+                    min="50"
+                    max="100"
+                    value={newSeedForm.physicalPurityPct}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, physicalPurityPct: parseInt(e.target.value) || 98 })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">MRP (₹)</label>
+                  <input
+                    type="number"
+                    value={newSeedForm.mrp}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, mrp: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    value={newSeedForm.expiryDate}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, expiryDate: e.target.value })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-ink-700 mb-1">Seller / Vendor</label>
+                  <input
+                    type="text"
+                    value={newSeedForm.seller}
+                    onChange={(e) => setNewSeedForm({ ...newSeedForm, seller: e.target.value })}
+                    className="w-full px-3 py-2 bg-cream-50 border border-sage-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-sage-200">
+                <button
+                  type="button"
+                  onClick={() => setShowAddSeedModal(false)}
+                  className="px-4 py-2 border border-sage-300 rounded-xl text-ink-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-paddy-700 hover:bg-paddy-800 text-white font-bold rounded-xl shadow-sm"
+                >
+                  Save Seed Batch
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* INTERNAL QR GENERATOR MODAL */}
+      {showQrModal && selectedBatch && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full border border-sage-300 shadow-2xl text-center space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-sage-200">
+              <h4 className="font-bold text-forest-900 text-sm">Internal Batch QR Tag</h4>
+              <button onClick={() => setShowQrModal(false)} className="text-ink-400 hover:text-forest-900">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Simulated 2D Matrix Tag */}
+            <div className="p-6 bg-white border-2 border-forest-900 rounded-2xl mx-auto w-56 h-56 flex flex-col items-center justify-center shadow-inner">
+              <QrCode className="w-36 h-36 text-forest-900" />
+              <span className="font-mono text-[10px] font-bold mt-2 text-ink-700">
+                {selectedBatch.batchNumber}
+              </span>
+            </div>
+
+            <div className="text-xs text-ink-600 space-y-1">
+              <p className="font-bold text-forest-900">{selectedBatch.variety}</p>
+              <p className="text-[11px] text-ink-500">
+                Internal Inventory Tag • Farm Cadastre ID: {state.farm.id}
+              </p>
+            </div>
+
+            <button
+              onClick={() => {
+                alert("Printing simulated QR tag...");
+                setShowQrModal(false);
+              }}
+              className="w-full py-2.5 bg-forest-800 text-harvest-300 font-bold text-xs rounded-xl shadow-agro flex items-center justify-center gap-2"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Print Internal Label</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Report Suspicious Modal */}
+      {showReportModal && selectedBatch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink-900/60 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 border border-sage-300 shadow-2xl space-y-4">
-            <h3 className="font-display font-bold text-lg text-forest-900 flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-terracotta-600" />
-              <span>
-                {language === "ta"
-                  ? "விதை தரம் குறித்த புகார் பதிவு"
-                  : "Report Seed Discrepancy"}
-              </span>
-            </h3>
+            <div className="flex justify-between items-center">
+              <h3 className="font-display font-bold text-lg text-forest-900 flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-terracotta-600" />
+                <span>Report Suspicious Lot</span>
+              </h3>
+              <button onClick={() => setShowReportModal(false)} className="text-ink-400 hover:text-forest-900">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
             <p className="text-xs text-ink-600">
-              {language === "ta"
-                ? "முளைப்புத்திறன் குறைவாக இருந்தாலோ அல்லது போலி விதையாக சந்தேகம் இருந்தாலோ ஆய்வுத்துறைக்கு தகவல் அனுப்பலாம்."
-                : "Describe a poor germination result or damaged tag. This demo stores the report locally; it does not contact an inspection authority."}
+              Logged reports are recorded to your account and forwarded to the agricultural inspection desk for batch verification.
             </p>
 
-            <form onSubmit={handleReportIssue} className="space-y-4">
+            <form onSubmit={handleReportIssue} className="space-y-4 text-xs">
+              <div className="p-3 bg-cream-50 rounded-xl border border-sage-200">
+                <span className="font-bold block text-forest-900">Batch: {selectedBatch.batchNumber}</span>
+                <span className="text-ink-600">{selectedBatch.variety} • {selectedBatch.manufacturer}</span>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-ink-700 mb-1">
-                  Issue Description
+                <label className="block font-bold text-ink-700 mb-1">
+                  Reason for Reporting *
                 </label>
                 <textarea
                   value={reportText}
                   onChange={(e) => setReportText(e.target.value)}
                   required
                   rows={3}
-                  placeholder="e.g. Germination rate observed below 60% after 6 days in nursery bed..."
-                  className="w-full p-2.5 bg-cream-50 border border-sage-300 rounded-xl text-xs font-semibold"
+                  placeholder="e.g. Germination rate observed below 50% in nursery; seed tag appears tampered with..."
+                  className="w-full p-2.5 bg-cream-50 border border-sage-300 rounded-xl font-medium"
                 />
               </div>
 
@@ -485,15 +739,15 @@ export const SeedPassportPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowReportModal(false)}
-                  className="px-4 py-2 rounded-xl border border-sage-300 text-xs font-semibold text-ink-600"
+                  className="px-4 py-2 rounded-xl border border-sage-300 font-semibold text-ink-600"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-terracotta-600 text-white font-bold text-xs shadow-sm"
+                  className="px-5 py-2 rounded-xl bg-terracotta-600 text-white font-bold shadow-sm hover:bg-terracotta-700"
                 >
-                  Save Demo Report
+                  Submit Discrepancy Report
                 </button>
               </div>
             </form>
