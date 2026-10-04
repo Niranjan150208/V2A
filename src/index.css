@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --forest: #173C2C;
+    --paddy: #477A42;
+    --harvest: #E4B94F;
+    --cream: #F8F5E9;
+    --terracotta: #C76E48;
+    --sage: #DCE8D3;
+    --ink: #26332B;
+  }
+
+  body {
+    background-color: #F8F5E9;
+    color: #26332B;
+    overflow-x: hidden;
+  }
+
+  /* Custom smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* Subtle Paddy Field Line Patterns */
+.bg-paddy-contour {
+  background-image: radial-gradient(#477A42 0.75px, transparent 0.75px), radial-gradient(#E4B94F 0.5px, #F8F5E9 0.5px);
+  background-size: 30px 30px;
+  background-position: 0 0, 15px 15px;
+  background-opacity: 0.05;
+}
+
+.bg-organic-waves {
+  background: 
+    radial-gradient(ellipse at 10% 0%, rgba(71, 122, 66, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 90% 100%, rgba(228, 185, 79, 0.12) 0%, transparent 50%),
+    #F8F5E9;
+}
+
+.paddy-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(71, 122, 66, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(71, 122, 66, 0.05) 1px, transparent 1px);
+}
+
+.harvest-glow-card {
+  position: relative;
+  overflow: hidden;
+}
+.harvest-glow-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 150px;
+  background: radial-gradient(circle, rgba(228, 185, 79, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F6ED;
+}
+::-webkit-scrollbar-thumb {
+  background: #C2D6B5;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #477A42;
+}
+
+/* Tamil font class */
+.font-tamil {
+  font-family: 'Noto Sans Tamil', system-ui, sans-serif;
+}

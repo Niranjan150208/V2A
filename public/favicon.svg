@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="v2aGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#173C2C" />
+      <stop offset="60%" stop-color="#477A42" />
+      <stop offset="100%" stop-color="#E4B94F" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F6E7BF" />
+      <stop offset="100%" stop-color="#E4B94F" />
+    </linearGradient>
+  </defs>
+  <!-- Circular Cycle Track -->
+  <circle cx="32" cy="32" r="30" fill="#F8F5E9" stroke="#477A42" stroke-width="2.5" stroke-dasharray="6 3" />
+  
+  <!-- Seed Base (Terracotta & Gold) -->
+  <path d="M 28 46 C 24 44 22 38 24 34 C 26 30 32 30 34 34 C 36 38 34 44 28 46 Z" fill="#C76E48" />
+  
+  <!-- Sprouting Stem & Leaves -->
+  <path d="M 31 34 Q 31 22 40 16" stroke="#477A42" stroke-width="3" stroke-linecap="round" fill="none" />
+  <path d="M 31 27 C 24 25 21 21 20 17 C 24 16 29 20 31 27 Z" fill="#477A42" />
+  <path d="M 33 22 C 38 19 44 19 47 15 C 47 19 41 23 33 22 Z" fill="#E4B94F" />
+
+  <!-- Paddy Grains Arch (Harvest Symbolism) -->
+  <ellipse cx="44" cy="22" rx="3.5" ry="2" transform="rotate(-30 44 22)" fill="url(#goldGrad)" stroke="#7F5E16" stroke-width="0.75" />
+  <ellipse cx="47" cy="27" rx="3.5" ry="2" transform="rotate(-15 47 27)" fill="url(#goldGrad)" stroke="#7F5E16" stroke-width="0.75" />
+  <ellipse cx="48" cy="33" rx="3.5" ry="2" transform="rotate(5 48 33)" fill="url(#goldGrad)" stroke="#7F5E16" stroke-width="0.75" />
+</svg>
