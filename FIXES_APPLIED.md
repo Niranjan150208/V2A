@@ -9,6 +9,9 @@ This patch set is based on the supplied `V2A-main.zip` source snapshot.
 - Irrigation records now retain the first farm parcel's identifier and display name/survey number, and the history displays that field context.
 - Seed Passport's internal label action opens a printable label document and invokes the browser print dialog instead of showing a simulated-print alert.
 - Expert consultation history heading now accurately describes the mixed pending/answered request list.
+- Fixed login redirect loop where demo form submission did not invoke `startDemo()`, causing the auth guard to reject navigation and bounce back to `#/login`.
+- Removed redundant required password input from the demo phone/OTP login view.
+- Fixed Supabase auth race condition where asynchronous `onAuthStateChange('SIGNED_IN')` cleared user state before `activateCloudUser` resolved.
 
 ## Validation
 - TypeScript/TSX syntax transpilation check: passed for 51 source files.

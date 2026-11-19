@@ -167,6 +167,7 @@ export const LoginPage: React.FC = () => {
           );
           return;
         }
+        await startDemo();
         AppStore.setCurrentUser({
           id: "USER-VIJAY-DEMO",
           phone,
@@ -366,8 +367,7 @@ export const LoginPage: React.FC = () => {
               </>
             )}
 
-            {((cloudEnabled && ["signin", "signup", "reset"].includes(mode)) ||
-              (!cloudEnabled && mode === "signin")) && (
+            {cloudEnabled && ["signin", "signup", "reset"].includes(mode) && (
               <div>
                 <label
                   htmlFor="auth-password"

@@ -180,6 +180,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session?.user.id) throw new Error('Sign-in completed without an active session. Please try again.');
       localStorage.removeItem(DEMO_MODE_KEY);
       setDemoMode(false);
+      activatedUserId.current = data.session.user.id;
       sessionRef.current = data.session;
       setSession(data.session);
       setAuthInitialized(true);
@@ -201,6 +202,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.session) {
       localStorage.removeItem(DEMO_MODE_KEY);
       setDemoMode(false);
+      activatedUserId.current = data.session.user.id;
       setReady(false);
       sessionRef.current = data.session;
       setSession(data.session);
